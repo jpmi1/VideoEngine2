@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VideoEngine - Bulk AI Video Creation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8f9fa;
+    }
+    .header {
+      background-color: #4285f4;
+      color: white;
+      padding: 1rem 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .dashboard-card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: transform 0.3s ease;
+    }
+    .dashboard-card:hover {
+      transform: translateY(-5px);
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      color: #4285f4;
+    }
+    .btn-primary {
+      background-color: #4285f4;
+      border-color: #4285f4;
+    }
+    .btn-primary:hover {
+      background-color: #3367d6;
+      border-color: #3367d6;
+    }
+    .status-badge {
+      background-color: #e3f2fd;
+      color: #0d47a1;
+      padding: 0.5rem 1rem;
+      border-radius: 50px;
+      font-weight: 500;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-6">
+          <h1>VideoEngine</h1>
+          <p class="mb-0">Bulk AI Video Creation Platform</p>
+        </div>
+        <div class="col-md-6 text-md-end">
+          <span class="status-badge">
+            <span id="status-icon">✅</span> 
+            <span id="status-text">Server Running</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mt-4">
+    <div class="row">
+      <div class="col-md-3">
+        <div class="dashboard-card">
+          <div class="feature-icon">📊</div>
+          <h3>Dashboard</h3>
+          <p>View your video creation projects and analytics</p>
+          <button class="btn btn-primary" onclick="showSection('dashboard')">Open Dashboard</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="dashboard-card">
+          <div class="feature-icon">📝</div>
+          <h3>Spreadsheet Import</h3>
+          <p>Upload spreadsheets with video specifications</p>
+          <button class="btn btn-primary" onclick="showSection('spreadsheet')">Import Data</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="dashboard-card">
+          <div class="feature-icon">🎬</div>
+          <h3>Video Generation</h3>
+          <p>Create videos using AI generation tools</p>
+          <button class="btn btn-primary" onclick="showSection('video')">Generate Videos</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="dashboard-card">
+          <div class="feature-icon">📱</div>
+          <h3>TikTok Integration</h3>
+          <p>Post videos directly to TikTok</p>
+          <button class="btn btn-primary" onclick="showSection('tiktok')">Connect TikTok</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dashboard-section" class="mt-4 section-content">
+      <div class="dashboard-card">
+        <h2>Dashboard</h2>
+        <p>Welcome to your VideoEngine dashboard. Here you can view all your video projects and analytics.</p>
+        <div class="alert alert-info">
+          This feature is currently under development. Check back soon for updates!
+        </div>
+      </div>
+    </div>
+
+    <div id="spreadsheet-section" class="mt-4 section-content" style="display: none;">
+      <div class="dashboard-card">
+        <h2>Spreadsheet Import</h2>
+        <p>Upload your spreadsheet with video specifications to begin the video creation process.</p>
+        <div class="mb-3">
+          <label for="spreadsheetFile" class="form-label">Select Spreadsheet File</label>
+          <input class="form-control" type="file" id="spreadsheetFile" accept=".xlsx,.xls,.csv">
+        </div>
+        <button class="btn btn-primary" onclick="uploadSpreadsheet()">Upload</button>
+      </div>
+    </div>
+
+    <div id="video-section" class="mt-4 section-content" style="display: none;">
+      <div class="dashboard-card">
+        <h2>Video Generation</h2>
+        <p>Generate videos using AI tools like Gemini Veo 2.</p>
+        <div class="mb-3">
+          <label for="videoTitle" class="form-label">Video Title</label>
+          <input type="text" class="form-control" id="videoTitle" placeholder="Enter video title">
+        </div>
+        <div class="mb-3">
+          <label for="videoDescription" class="form-label">Video Description</label>
+          <textarea class="form-control" id="videoDescription" rows="3" placeholder="Enter video description"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="generateVideo()">Generate Video</button>
+      </div>
+    </div>
+
+    <div id="tiktok-section" class="mt-4 section-content" style="display: none;">
+      <div class="dashboard-card">
+        <h2>TikTok Integration</h2>
+        <p>Connect your TikTok account to post videos directly from VideoEngine.</p>
+        <button class="btn btn-primary" onclick="connectTikTok()">Connect TikTok Account</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-5 py-3 bg-light">
+    <div class="container text-center">
+      <p>VideoEngine - Bulk AI Video Creation Platform</p>
+      <p><small>Version 1.0.0</small></p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Check server status
+    fetch('/api/health')
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'healthy') {
+          document.getElementById('status-text').textContent = 'Server Running';
+          document.getElementById('status-icon').textContent = '✅';
+        } else {
+          document.getElementById('status-text').textContent = 'Server Issue';
+          document.getElementById('status-icon').textContent = '⚠️';
+        }
+      })
+      .catch(error => {
+        document.getElementById('status-text').textContent = 'Connection Error';
+        document.getElementById('status-icon').textContent = '❌';
+      });
+
+    // Show different sections
+    function showSection(section) {
+      // Hide all sections
+      document.querySelectorAll('.section-content').forEach(el => {
+        el.style.display = 'none';
+      });
+      
+      // Show selected section
+      document.getElementById(section + '-section').style.display = 'block';
+    }
+
+    // Placeholder functions for buttons
+    function uploadSpreadsheet() {
+      const fileInput = document.getElementById('spreadsheetFile');
+      if (fileInput.files.length === 0) {
+        alert('Please select a file first');
+        return;
+      }
+      alert('Spreadsheet upload feature is under development. Your file: ' + fileInput.files[0].name);
+    }
+
+    function generateVideo() {
+      const title = document.getElementById('videoTitle').value;
+      const description = document.getElementById('videoDescription').value;
+      
+      if (!title || !description) {
+        alert('Please fill in all fields');
+        return;
+      }
+      
+      alert('Video generation feature is under development. Your request has been received.');
+    }
+
+    function connectTikTok() {
+      alert('TikTok integration is under development. Check back soon!');
+    }
+
+    // Show dashboard by default
+    showSection('dashboard');
+  </script>
+</body>
+</html>
