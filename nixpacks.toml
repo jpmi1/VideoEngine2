@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs-16_x", "nodejs-16_x.pkgs.npm"]
+aptPkgs = ["nodejs", "npm"]
 
 [phases.install]
 cmds = ["npm install"]
