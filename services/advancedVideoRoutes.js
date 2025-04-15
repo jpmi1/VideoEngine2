@@ -1,148 +1,81 @@
 /**
- * API routes for the advanced video generation service
- * Implements Test-Time Training approach for consistent clip generation
+ * Advanced Video Routes for VideoEngine
+ * Handles API endpoints for video generation with 16:9 aspect ratio
+ * and Google Drive direct download links
  */
 
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
-const AdvancedVideoGenerator = require('../services/advancedVideoGenerationService');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+const advancedVideoService = require('./advancedVideoGenerationService');
+const googleDriveService = require('./googleDriveService');
 
-// Configure multer for script file uploads
-const upload = multer({
-  dest: path.join(process.cwd(), 'uploads'),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
-});
-
-// Initialize the advanced video generator
-const videoGenerator = new AdvancedVideoGenerator({
-  debug: process.env.NODE_ENV !== 'production',
-  apiKey: process.env.GEMINI_API_KEY,
-  tempFolder: path.join(process.cwd(), 'uploads/temp'),
-  outputFolder: path.join(process.cwd(), 'uploads/videos')
-});
-
-// Initialize the generator when the server starts
-(async () => {
-  try {
-    await videoGenerator.initialize();
-    console.log('Advanced Video Generator initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize Advanced Video Generator:', error);
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
   }
-})();
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 /**
- * Generate a video from a script with consistent clips
+ * Generate video from script
  * POST /api/advanced-video/generate
  */
-router.post('/generate', upload.single('scriptFile'), async (req, res) => {
+router.post('/generate', async (req, res) => {
+  console.log('Received video generation request');
+  
   try {
-    // Get script from either file upload or request body
-    let script = req.body.script;
-    
-    if (req.file) {
-      const fileContent = await fs.readFile(req.file.path, 'utf8');
-      script = fileContent;
-      // Clean up uploaded file
-      await fs.unlink(req.file.path);
-    }
+    const { script, options = {} } = req.body;
     
     if (!script) {
       return res.status(400).json({ error: 'Script is required' });
     }
     
-    // Get other parameters from request body
-    const style = req.body.style || 'cinematic';
-    const characters = req.body.characters ? 
-      (Array.isArray(req.body.characters) ? req.body.characters : [req.body.characters]) : 
-      ['character'];
-    const outputName = req.body.outputName || `video_${Date.now()}`;
-    
-    // Create a request ID for tracking
-    const requestId = Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
-    
-    // Store request in database (simulated here)
-    const videoRequest = {
-      id: requestId,
-      title: req.body.title || outputName,
-      description: req.body.description || 'Generated from script',
-      script,
-      style,
-      characters,
-      status: 'pending',
-      createdAt: new Date().toISOString()
+    // Ensure 16:9 aspect ratio is set in options
+    const enhancedOptions = {
+      ...options,
+      aspectRatio: '16:9',
+      resolution: '1920x1080'
     };
     
-    // Start generation process asynchronously
-    processVideoGeneration(videoRequest).catch(error => {
-      console.error(`Error processing video generation for request ${requestId}:`, error);
-      // Update request status to failed (would be in database in real implementation)
-      videoRequest.status = 'failed';
-      videoRequest.error = error.message;
-    });
+    // Start video generation process
+    const result = await advancedVideoService.generateVideoFromScript(script, enhancedOptions);
     
-    // Return request ID immediately
-    res.status(202).json({
-      requestId,
-      message: 'Video generation started',
-      status: 'pending'
-    });
+    res.status(200).json(result);
   } catch (error) {
-    console.error('Error starting video generation:', error);
-    res.status(500).json({ error: 'Failed to start video generation' });
+    console.error('Error generating video:', error.message);
+    res.status(500).json({ error: 'Failed to generate video', message: error.message });
   }
 });
 
 /**
- * Get status of a video generation request
- * GET /api/advanced-video/status/:requestId
+ * Get video generation status
+ * GET /api/advanced-video/status/:id
  */
-router.get('/status/:requestId', async (req, res) => {
+router.get('/status/:id', async (req, res) => {
+  console.log('Received video status request for ID:', req.params.id);
+  
   try {
-    const { requestId } = req.params;
-    
-    // In a real implementation, this would fetch from a database
-    // For this example, we'll simulate a response
-    
-    // Simulate different statuses based on request ID
-    const lastChar = requestId.charAt(requestId.length - 1);
-    let status;
-    
-    if (['0', '1'].includes(lastChar)) {
-      status = 'pending';
-    } else if (['2', '3', '4'].includes(lastChar)) {
-      status = 'processing';
-    } else if (['5', '6', '7', '8'].includes(lastChar)) {
-      status = 'completed';
-    } else {
-      status = 'failed';
-    }
-    
-    // Simulate a response
-    const response = {
-      id: requestId,
-      title: `Video ${requestId}`,
-      description: 'Generated from script',
-      status,
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      style: 'cinematic',
-      duration: 60
-    };
-    
-    if (status === 'completed') {
-      response.completedAt = new Date().toISOString();
-      response.outputUrl = `/api/advanced-video/download/${requestId}`;
-    } else if (status === 'failed') {
-      response.error = 'Video generation failed';
-    }
-    
-    res.json(response);
+    const result = await advancedVideoService.getVideoRequestStatus(req.params.id);
+    res.status(200).json(result);
   } catch (error) {
-    console.error('Error getting video status:', error);
-    res.status(500).json({ error: 'Failed to get video status' });
+    console.error('Error getting video status:', error.message);
+    res.status(404).json({ error: 'Video request not found', message: error.message });
   }
 });
 
@@ -151,101 +84,165 @@ router.get('/status/:requestId', async (req, res) => {
  * GET /api/advanced-video/list
  */
 router.get('/list', async (req, res) => {
+  console.log('Received request to list all videos');
+  
   try {
-    // In a real implementation, this would fetch from a database
-    // For this example, we'll simulate a response with some sample videos
-    
-    const videos = [];
-    
-    // Generate 5 sample videos with different statuses
-    const statuses = ['pending', 'processing', 'completed', 'completed', 'failed'];
-    
-    for (let i = 0; i < 5; i++) {
-      const requestId = Date.now().toString(36) + i;
-      const status = statuses[i];
-      
-      const video = {
-        id: requestId,
-        title: `Sample Video ${i + 1}`,
-        description: `This is a sample video ${i + 1} with status "${status}"`,
-        status,
-        createdAt: new Date(Date.now() - (i * 3600000)).toISOString(),
-        style: i % 2 === 0 ? 'cinematic' : 'documentary',
-        duration: 60
-      };
-      
-      if (status === 'completed') {
-        video.completedAt = new Date(Date.now() - (i * 1800000)).toISOString();
-        video.outputUrl = `/api/advanced-video/download/${requestId}`;
-      } else if (status === 'failed') {
-        video.error = 'Video generation failed';
-      }
-      
-      videos.push(video);
+    const result = await advancedVideoService.getAllVideoRequests();
+    res.status(200).json({ videos: result, message: 'Test route working correctly' });
+  } catch (error) {
+    console.error('Error listing videos:', error.message);
+    res.status(500).json({ error: 'Failed to list videos', message: error.message });
+  }
+});
+
+/**
+ * Upload video to Google Drive and get direct download link
+ * POST /api/advanced-video/upload-to-drive
+ */
+router.post('/upload-to-drive', upload.single('video'), async (req, res) => {
+  console.log('Received request to upload video to Google Drive');
+  
+  try {
+    if (!req.file && !req.body.videoUrl) {
+      return res.status(400).json({ error: 'Video file or URL is required' });
     }
     
-    res.json(videos);
-  } catch (error) {
-    console.error('Error listing videos:', error);
-    res.status(500).json({ error: 'Failed to list videos' });
-  }
-});
-
-/**
- * Download a generated video
- * GET /api/advanced-video/download/:requestId
- */
-router.get('/download/:requestId', async (req, res) => {
-  try {
-    const { requestId } = req.params;
+    const videoName = req.body.name || `VideoEngine_${Date.now()}.mp4`;
+    const userId = req.body.userId || 'default';
     
-    // In a real implementation, this would fetch the video file path from a database
-    // For this example, we'll return a placeholder message
+    let uploadResult;
     
-    res.send(`This would be the download for video ${requestId}`);
+    if (req.file) {
+      // Upload from local file
+      uploadResult = await googleDriveService.uploadFile({
+        name: videoName,
+        mimeType: 'video/mp4',
+        filePath: req.file.path
+      }, userId);
+      
+      // Create direct download link
+      const directDownloadUrl = await googleDriveService.createDirectDownloadLink(uploadResult.id, userId);
+      uploadResult.directDownloadUrl = directDownloadUrl;
+      
+      // Clean up local file
+      fs.unlinkSync(req.file.path);
+    } else {
+      // Upload from URL
+      uploadResult = await googleDriveService.uploadVideoAndCreateDownloadLink(
+        req.body.videoUrl,
+        videoName,
+        userId
+      );
+    }
     
-    // In a real implementation, it would be something like:
-    // const videoPath = path.join(videoGenerator.config.outputFolder, `${requestId}.mp4`);
-    // res.download(videoPath);
-  } catch (error) {
-    console.error('Error downloading video:', error);
-    res.status(500).json({ error: 'Failed to download video' });
-  }
-});
-
-/**
- * Process video generation asynchronously
- * @param {Object} videoRequest - Video generation request
- */
-async function processVideoGeneration(videoRequest) {
-  try {
-    // Update request status to processing
-    videoRequest.status = 'processing';
-    
-    // Generate the video
-    const outputPath = await videoGenerator.generateVideo({
-      script: videoRequest.script,
-      style: videoRequest.style,
-      characters: videoRequest.characters,
-      outputName: videoRequest.id
+    res.status(200).json({
+      success: true,
+      file: uploadResult,
+      message: 'Video uploaded to Google Drive successfully'
     });
-    
-    // Update request status to completed
-    videoRequest.status = 'completed';
-    videoRequest.completedAt = new Date().toISOString();
-    videoRequest.outputUrl = `/api/advanced-video/download/${videoRequest.id}`;
-    
-    console.log(`Video generation completed for request ${videoRequest.id}`);
-    return outputPath;
   } catch (error) {
-    console.error(`Error generating video for request ${videoRequest.id}:`, error);
-    
-    // Update request status to failed
-    videoRequest.status = 'failed';
-    videoRequest.error = error.message;
-    
-    throw error;
+    console.error('Error uploading to Google Drive:', error.message);
+    res.status(500).json({ error: 'Failed to upload to Google Drive', message: error.message });
   }
-}
+});
+
+/**
+ * Get Google Drive authentication URL
+ * GET /api/advanced-video/drive-auth
+ */
+router.get('/drive-auth', (req, res) => {
+  console.log('Received request for Google Drive auth URL');
+  
+  try {
+    const userId = req.query.userId || uuidv4();
+    const authUrl = googleDriveService.getAuthUrl(userId);
+    
+    res.status(200).json({
+      success: true,
+      userId,
+      authUrl,
+      message: 'Authentication URL generated successfully'
+    });
+  } catch (error) {
+    console.error('Error generating auth URL:', error.message);
+    res.status(500).json({ error: 'Failed to generate auth URL', message: error.message });
+  }
+});
+
+/**
+ * Handle Google Drive authentication callback
+ * GET /api/advanced-video/drive-callback
+ */
+router.get('/drive-callback', async (req, res) => {
+  console.log('Received Google Drive auth callback');
+  
+  try {
+    const { code, state } = req.query;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Authorization code is required' });
+    }
+    
+    const userId = state || 'default';
+    const result = await googleDriveService.handleAuthCallback(code, userId);
+    
+    // Redirect to frontend with success message
+    res.redirect(`/?auth=success&userId=${userId}`);
+  } catch (error) {
+    console.error('Error handling auth callback:', error.message);
+    res.status(500).json({ error: 'Failed to handle auth callback', message: error.message });
+  }
+});
+
+/**
+ * List files from Google Drive
+ * GET /api/advanced-video/drive-files
+ */
+router.get('/drive-files', async (req, res) => {
+  console.log('Received request to list Google Drive files');
+  
+  try {
+    const userId = req.query.userId || 'default';
+    const options = {
+      query: req.query.query || "mimeType contains 'video/'",
+      pageSize: parseInt(req.query.pageSize) || 10,
+      orderBy: req.query.orderBy || 'createdTime desc'
+    };
+    
+    const files = await googleDriveService.listFiles(userId, options);
+    
+    res.status(200).json({
+      success: true,
+      files,
+      message: 'Files listed successfully'
+    });
+  } catch (error) {
+    console.error('Error listing files:', error.message);
+    res.status(500).json({ error: 'Failed to list files', message: error.message });
+  }
+});
+
+/**
+ * Create direct download link for Google Drive file
+ * GET /api/advanced-video/drive-download/:fileId
+ */
+router.get('/drive-download/:fileId', async (req, res) => {
+  console.log('Received request to create direct download link for file:', req.params.fileId);
+  
+  try {
+    const userId = req.query.userId || 'default';
+    const downloadUrl = await googleDriveService.createDirectDownloadLink(req.params.fileId, userId);
+    
+    res.status(200).json({
+      success: true,
+      fileId: req.params.fileId,
+      downloadUrl,
+      message: 'Direct download link created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating direct download link:', error.message);
+    res.status(500).json({ error: 'Failed to create direct download link', message: error.message });
+  }
+});
 
 module.exports = router;
