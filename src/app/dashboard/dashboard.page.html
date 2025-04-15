@@ -1,0 +1,62 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>
+      {{appTitle}} - Dashboard
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button>
+        <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="welcome-container">
+    <h1>Welcome to VideoEngine</h1>
+    <p>Your platform for bulk AI video creation and TikTok integration</p>
+  </div>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Getting Started</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <p>This is a minimal working version of the VideoEngine application. The following features will be implemented incrementally:</p>
+      <ion-list lines="none">
+        <ion-item>
+          <ion-icon name="document-text-outline" slot="start"></ion-icon>
+          <ion-label>Spreadsheet Import</ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-icon name="videocam-outline" slot="start"></ion-icon>
+          <ion-label>Video Generation</ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
+          <ion-label>Cloud Storage Integration</ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-icon name="logo-tiktok" slot="start"></ion-icon>
+          <ion-label>TikTok Integration</ion-label>
+        </ion-item>
+      </ion-list>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>System Status</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-item lines="none">
+        <ion-icon name="checkmark-circle" color="success" slot="start"></ion-icon>
+        <ion-label>Application Version: {{appVersion}}</ion-label>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-icon name="checkmark-circle" color="success" slot="start"></ion-icon>
+        <ion-label>Server Connection: Active</ion-label>
+      </ion-item>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

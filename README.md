@@ -1,35 +1,36 @@
-# Video Engine - Railway Deployment
+# VideoEngine - Bulk AI Video Creation App
 
-This is a simplified version of the Video Engine application, designed for easy deployment to Railway.app.
+This is a minimal working Angular/Ionic application structure for the VideoEngine application. This application is designed to be deployed to Railway.app.
 
-## Overview
+## Features (Planned)
 
-This package contains a basic Express server with a placeholder frontend. It's designed to be deployed to Railway.app without the Angular/Ionic build issues that were encountered with the full version.
+- Spreadsheet Import: Upload and process spreadsheets with video specifications
+- Video Generation: Integration with multiple AI video generation APIs
+- Cloud Storage: Connect to Google Drive and Box for storing videos
+- TikTok Integration: Direct posting to TikTok with analytics
 
-## Files Included
+## Getting Started
 
-- `server.js` - A simple Express server that serves static files and provides a health check endpoint
-- `package.json` - Dependencies and scripts for the application
-- `nixpacks.toml` - Configuration for Railway's Nixpacks build system
-- `www/index.html` - A placeholder frontend page
+1. Clone this repository
+2. Install dependencies: `npm install`
+3. Run locally: `npm start`
+4. Build for production: `npm run build`
 
-## Deployment Instructions
+## Deployment
 
-1. Create a new GitHub repository
-2. Upload all files in this package to the repository, maintaining the folder structure
-3. Connect your Railway.app account to the GitHub repository
-4. Deploy the application on Railway
-5. Once deployed, you can access the application at the URL provided by Railway
+This application is configured for deployment to Railway.app using the included nixpacks.toml and railway.json files.
 
-## Next Steps
+## Project Structure
 
-After successful deployment, you can gradually add back the Angular/Ionic functionality:
-
-1. Add the TikTok API integration
-2. Implement the video generation workflow
-3. Add the cloud storage connections
-4. Develop the full user interface
-
-## Support
-
-If you encounter any issues with the deployment, please refer to the Railway.app documentation or contact support.
+- `/src`: Application source code
+  - `/app`: Angular components and modules
+  - `/assets`: Static assets
+  - `/environments`: Environment configuration
+  - `/theme`: Ionic theming
+- `/www`: Build output directory
+- `server.js`: Express server for serving the application
+- `package.json`: Dependencies and scripts
+- `angular.json`: Angular configuration
+- `ionic.config.json`: Ionic configuration
+- `nixpacks.toml`: Railway build configuration
+- `railway.json`: Railway deployment configuration

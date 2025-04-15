@@ -1,34 +1,37 @@
 const express = require('express');
-const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const dotenv = require('dotenv');
-
-// Load environment variables
-dotenv.config();
-
+const path = require('path');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files from the 'www' directory
 app.use(express.static(path.join(__dirname, 'www')));
 
 // API routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+app.get('/api/deployment/status', (req, res) => {
+  res.json({ status: 'active', version: '1.0.0' });
 });
 
-// Catch-all route to serve the index.html file
+app.post('/api/deployment/prepare', (req, res) => {
+  res.json({ success: true, message: 'Deployment preparation completed' });
+});
+
+// TikTok callback route
+app.get('/tiktok/callback', (req, res) => {
+  // This route will be handled by the Angular app
+  res.sendFile(path.join(__dirname, 'www', 'index.html'));
+});
+
+// Catch all routes and return the index file
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'www', 'index.html'));
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

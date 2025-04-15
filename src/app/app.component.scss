@@ -1,0 +1,10 @@
+/* App component styles */
+ion-app {
+  --background: var(--ion-background-color);
+}
+
+/* Global styles for the app root */
+:host {
+  display: block;
+  height: 100%;
+}
