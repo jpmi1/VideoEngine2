@@ -5,7 +5,7 @@ aptPkgs = ["nodejs", "npm"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npm install"]
+cmds = ["npm run build"]
 
 [start]
-cmd = "node server.js"
+cmd = "npm start"
