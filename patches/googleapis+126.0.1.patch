@@ -1,0 +1,14 @@
+diff --git a/node_modules/googleapis/build/src/apis/index.js b/node_modules/googleapis/build/src/apis/index.js
+index 1234567..abcdef0 100644
+--- a/node_modules/googleapis/build/src/apis/index.js
++++ b/node_modules/googleapis/build/src/apis/index.js
+@@ -1,6 +1,9 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ 
++// Use standalone punycode package instead of Node.js built-in
++global.punycode = require('punycode');
++
+ // Patch to prevent punycode deprecation warning
+ const originalEmit = process.emit;
+ process.emit = function(name, data, ...args) {
