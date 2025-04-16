@@ -1,293 +1,150 @@
-/**
- * Advanced Video Routes for VideoEngine
- * Handles API endpoints for video generation and Google Drive integration
- */
-
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
-const path = require('path');
-const axios = require('axios');
-
-// Import services
-let advancedVideoService;
-let googleDriveService;
-
-// Load services with error handling
-try {
-  advancedVideoService = require('./advancedVideoGenerationService');
-  console.log('Successfully loaded advancedVideoGenerationService');
-} catch (error) {
-  console.error('Error loading advancedVideoGenerationService:', error);
-  // Create mock service with basic functionality
-  advancedVideoService = {
-    generateVideoFromScript: async (script, options) => {
-      const requestId = uuidv4();
-      return {
-        id: requestId,
-        status: 'processing',
-        script,
-        options
-      };
-    },
-    getVideoStatus: (requestId) => {
-      return {
-        id: requestId,
-        status: 'processing',
-        progress: 50
-      };
-    },
-    listVideoRequests: () => {
-      return [];
-    }
-  };
-}
-
-try {
-  googleDriveService = require('./googleDriveService');
-  console.log('Successfully loaded googleDriveService');
-} catch (error) {
-  console.error('Error loading googleDriveService:', error);
-  // Create mock service with basic functionality
-  googleDriveService = {
-    getAuthUrl: (userId) => {
-      return `https://accounts.google.com/o/oauth2/auth?userId=${userId}`;
-    },
-    handleAuthCallback: async (code, userId) => {
-      return { success: true, userId };
-    },
-    uploadFile: async (fileData, userId) => {
-      return {
-        id: uuidv4(),
-        name: fileData.name,
-        webViewLink: `https://drive.google.com/file/d/${uuidv4()}/view`
-      };
-    },
-    createDirectDownloadLink: async (fileId) => {
-      return `https://drive.google.com/uc?export=download&id=${fileId}`;
-    },
-    listFiles: async (userId) => {
-      return [];
-    }
-  };
-}
+const { generateVideoWithFallback, checkVideoStatus } = require('./klingAiService');
+const { uploadToGoogleDrive, createDirectDownloadLink } = require('./googleDriveService');
 
 /**
- * Validate video URL
- * @param {string} url - URL to validate
- * @returns {Promise<boolean>} Whether URL is valid and accessible
- */
-async function validateVideoUrl(url) {
-  if (!url) return false;
-  
-  try {
-    // Check if URL is accessible
-    const response = await axios.head(url, { timeout: 10000 });
-    
-    // Check if response is successful and content type is video
-    const contentType = response.headers['content-type'] || '';
-    const isVideo = contentType.startsWith('video/') || 
-                   url.endsWith('.mp4') || 
-                   url.endsWith('.mov') || 
-                   url.endsWith('.webm');
-    
-    return response.status === 200 && isVideo;
-  } catch (error) {
-    console.error('Error validating video URL:', error.message);
-    return false;
-  }
-}
-
-/**
- * Generate video from script
+ * Generate a video using Kling AI
  * POST /api/advanced-video/generate
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { script, options } = req.body;
+    const { prompt, options = {} } = req.body;
     
-    // Validate input
-    if (!script || script.trim() === '') {
-      return res.status(400).json({ error: 'Script is required' });
+    if (!prompt) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: prompt' 
+      });
     }
     
-    // Enhance options with defaults
+    // Ensure 16:9 aspect ratio
     const enhancedOptions = {
-      aspectRatio: '16:9', // Ensure 16:9 aspect ratio
-      ...options
+      ...options,
+      aspectRatio: '16:9',
+      enhancePrompt: true
     };
     
-    // Generate video
-    const result = await advancedVideoService.generateVideoFromScript(script, enhancedOptions);
+    // Generate video using Kling AI
+    const result = await generateVideoWithFallback(prompt, enhancedOptions);
     
-    res.json(result);
+    // Return task information
+    res.json({
+      id: result.taskId || `task_${Date.now()}`,
+      status: result.status,
+      message: result.message,
+      prompt: prompt,
+      options: enhancedOptions,
+      keywords: result.keywords || []
+    });
   } catch (error) {
-    console.error('Error generating video:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Error generating video:', error);
+    res.status(500).json({ 
+      error: `Failed to generate video: ${error.message}` 
+    });
   }
 });
 
 /**
- * Get video generation status
- * GET /api/advanced-video/status/:id
+ * Check the status of a video generation task
+ * GET /api/advanced-video/status/:taskId
  */
-router.get('/status/:id', async (req, res) => {
+router.get('/status/:taskId', async (req, res) => {
   try {
-    const { id } = req.params;
+    const { taskId } = req.params;
     
-    // Get status
-    const status = await advancedVideoService.getVideoStatus(id);
-    
-    // Validate final video URL if status is completed
-    if (status.status === 'completed' && status.finalVideoUrl) {
-      const isValid = await validateVideoUrl(status.finalVideoUrl);
-      
-      if (!isValid) {
-        status.message = 'Warning: Final video URL may not be accessible';
-        status.urlValidation = 'failed';
-      } else {
-        status.urlValidation = 'passed';
-      }
+    if (!taskId) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: taskId' 
+      });
     }
     
-    res.json(status);
+    // Check task status
+    const result = await checkVideoStatus(taskId);
+    
+    // Return status information
+    res.json({
+      id: taskId,
+      status: result.status,
+      message: result.message,
+      videoUrl: result.videoUrl || null,
+      videoDuration: result.videoDuration || null
+    });
   } catch (error) {
-    console.error('Error getting video status:', error.message);
-    res.status(404).json({ error: error.message });
+    console.error('Error checking video status:', error);
+    res.status(500).json({ 
+      error: `Failed to check video status: ${error.message}` 
+    });
   }
 });
 
 /**
- * List all video requests
- * GET /api/advanced-video/list
- */
-router.get('/list', async (req, res) => {
-  try {
-    const videos = await advancedVideoService.listVideoRequests();
-    res.json({ videos });
-  } catch (error) {
-    console.error('Error listing videos:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get Google Drive authentication URL
- * GET /api/advanced-video/drive-auth
- */
-router.get('/drive-auth', async (req, res) => {
-  try {
-    const userId = req.query.userId || uuidv4();
-    const authUrl = await googleDriveService.getAuthUrl(userId);
-    
-    res.json({ authUrl, userId });
-  } catch (error) {
-    console.error('Error getting Drive auth URL:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Handle Google Drive authentication callback
- * GET /api/advanced-video/drive-callback
- */
-router.get('/drive-callback', async (req, res) => {
-  try {
-    const { code, state } = req.query;
-    
-    if (!code) {
-      return res.status(400).json({ error: 'Authorization code is required' });
-    }
-    
-    // Handle callback
-    const result = await googleDriveService.handleAuthCallback(code, state);
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Error handling Drive callback:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Upload video to Google Drive
+ * Upload a video to Google Drive
  * POST /api/advanced-video/upload-to-drive
  */
 router.post('/upload-to-drive', async (req, res) => {
   try {
-    const { videoUrl, videoName, userId } = req.body;
+    const { videoUrl, fileName } = req.body;
     
-    // Validate input
     if (!videoUrl) {
-      return res.status(400).json({ error: 'Video URL is required' });
+      return res.status(400).json({ 
+        error: 'Missing required parameter: videoUrl' 
+      });
     }
     
-    // Validate video URL
-    const isValid = await validateVideoUrl(videoUrl);
-    if (!isValid) {
-      return res.status(400).json({ error: 'Invalid or inaccessible video URL' });
-    }
+    // Generate a file name if not provided
+    const defaultFileName = `video_${Date.now()}.mp4`;
+    const videoFileName = fileName || defaultFileName;
     
-    // Upload to Drive
-    const result = await googleDriveService.uploadVideoAndCreateDownloadLink(
-      videoUrl,
-      videoName || `VideoEngine_${uuidv4()}.mp4`,
-      userId || 'default'
-    );
+    // Upload video to Google Drive
+    const uploadResult = await uploadToGoogleDrive(videoUrl, videoFileName);
     
-    res.json(result);
+    // Create direct download link
+    const downloadLink = await createDirectDownloadLink(uploadResult.fileId);
+    
+    // Return upload information
+    res.json({
+      fileId: uploadResult.fileId,
+      fileName: uploadResult.fileName,
+      googleDriveUrl: uploadResult.webViewLink,
+      googleDriveDownloadUrl: downloadLink,
+      message: 'Video uploaded to Google Drive successfully'
+    });
   } catch (error) {
-    console.error('Error uploading to Drive:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Error uploading to Google Drive:', error);
+    res.status(500).json({ 
+      error: `Failed to upload to Google Drive: ${error.message}` 
+    });
   }
 });
 
 /**
- * List files in Google Drive
- * GET /api/advanced-video/drive-files
- */
-router.get('/drive-files', async (req, res) => {
-  try {
-    const userId = req.query.userId || 'default';
-    const options = {
-      query: req.query.query || "mimeType contains 'video/'",
-      pageSize: parseInt(req.query.pageSize) || 10
-    };
-    
-    const files = await googleDriveService.listFiles(userId, options);
-    
-    res.json({ files });
-  } catch (error) {
-    console.error('Error listing Drive files:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get direct download link for Google Drive file
+ * Get a direct download link for a Google Drive file
  * GET /api/advanced-video/drive-download/:fileId
  */
 router.get('/drive-download/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
-    const userId = req.query.userId || 'default';
+    
+    if (!fileId) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: fileId' 
+      });
+    }
     
     // Create direct download link
-    const downloadUrl = await googleDriveService.createDirectDownloadLink(fileId, userId);
+    const downloadLink = await createDirectDownloadLink(fileId);
     
-    // Validate URL
-    const isValid = await validateVideoUrl(downloadUrl);
-    
-    res.json({ 
-      fileId, 
-      downloadUrl,
-      isValid,
-      message: isValid ? 'Download URL is valid and accessible' : 'Warning: URL may not be directly accessible'
+    // Return download link
+    res.json({
+      fileId: fileId,
+      downloadUrl: downloadLink,
+      message: 'Direct download link created successfully'
     });
   } catch (error) {
-    console.error('Error creating download link:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Error creating download link:', error);
+    res.status(500).json({ 
+      error: `Failed to create download link: ${error.message}` 
+    });
   }
 });
 
@@ -298,9 +155,7 @@ router.get('/drive-download/:fileId', async (req, res) => {
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'advanced-video',
-    videoService: !!advancedVideoService,
-    driveService: !!googleDriveService,
+    message: 'Advanced video service is running',
     timestamp: new Date().toISOString()
   });
 });
