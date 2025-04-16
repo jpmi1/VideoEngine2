@@ -1,20 +1,17 @@
 {
   "scripts": {
-    "start": "node server.js",
-    "test": "node tests/run-tests.js",
-    "test:report": "node tests/run-tests.js > logs/test-report.txt && cat logs/test-report.txt",
-    "test:railway": "node tests/railway-tests.js",
-    "test:comprehensive": "node tests/comprehensive-tests.js"
+    "start": "node --no-deprecation server.js",
+    "test": "node --no-deprecation tests/run-tests.js",
+    "test:report": "node --no-deprecation tests/run-tests.js > logs/test-report.txt && cat logs/test-report.txt",
+    "test:railway": "node --no-deprecation tests/railway-tests.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
     "bootstrap": "^5.3.0",
-    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "googleapis": "^126.0.1",
     "multer": "^1.4.5-lts.1",
-    "punycode": "^2.3.1",
     "uuid": "^9.0.1"
   },
   "engines": {

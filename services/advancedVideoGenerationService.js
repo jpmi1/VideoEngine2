@@ -17,8 +17,8 @@ const videoRequests = {};
  * Configuration for Gemini Veo 2 API
  */
 const geminiConfig = {
-  apiKey: process.env.GEMINI_API_KEY || 'your-api-key-here',
-  baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent',
+  apiKey: process.env.GEMINI_API_KEY || 'AIzaSyCgnMAfFxND1YreT_rdW0kw0kWjtHRXsbc',
+  baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-video:generateContent',
   aspectRatio: '16:9', // Ensure 16:9 aspect ratio for all videos
   resolution: '1920x1080', // Full HD resolution
   frameRate: 30, // 30 fps for smooth video
@@ -99,20 +99,21 @@ async function generateVideoClip(prompt, options = {}, referenceImageUrl = null)
       ...options
     };
     
-    // Prepare the request payload for Gemini Veo 2
+    // Prepare the request payload for Gemini Video API
     const payload = {
       contents: [
         {
           parts: [
-            { text: `Generate a video clip with the following specifications:
+            { 
+              text: `Create a high-quality video clip with the following specifications:
               - Content: ${prompt}
               - Aspect ratio: ${finalOptions.aspectRatio}
               - Resolution: ${finalOptions.resolution}
-              - Frame rate: ${finalOptions.frameRate}
               - Style: ${options.style || 'cinematic, professional'}
               - Duration: ${options.duration || 4} seconds
               ${referenceImageUrl ? `- Maintain visual consistency with the reference image` : ''}
-            `}
+              `
+            }
           ]
         }
       ],
@@ -128,40 +129,25 @@ async function generateVideoClip(prompt, options = {}, referenceImageUrl = null)
       payload.contents[0].parts.push({
         inlineData: {
           mimeType: 'image/jpeg',
-          data: referenceImageUrl // Base64 encoded image data
+          data: referenceImageUrl.replace(/^data:image\/jpeg;base64,/, '') // Remove data URL prefix
         }
       });
     }
     
-    // Check if we're in development mode or missing API key
-    if (process.env.NODE_ENV === 'development' || !geminiConfig.apiKey || geminiConfig.apiKey === 'your-api-key-here') {
-      console.log('Using mock response in development mode or missing API key');
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock response for development
-      const mockVideoUrl = `https://storage.googleapis.com/gemini-generated-videos/${uuidv4()}.mp4`;
-      const mockThumbnailUrl = `https://storage.googleapis.com/gemini-generated-videos/${uuidv4()}.jpg`;
-      
-      return {
-        videoUrl: mockVideoUrl,
-        thumbnailUrl: mockThumbnailUrl,
-        prompt,
-        options: finalOptions
-      };
-    }
-    
-    // Make actual API call to Gemini Veo 2
+    // Make actual API call to Gemini Video API
+    console.log(`Making API call to ${geminiConfig.baseUrl}`);
     const response = await axios.post(
       `${geminiConfig.baseUrl}?key=${geminiConfig.apiKey}`,
       payload,
       {
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 60000 // 60 second timeout for video generation
       }
     );
+    
+    console.log('Gemini API response received:', JSON.stringify(response.data, null, 2).substring(0, 500) + '...');
     
     // Process the response
     if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
@@ -169,13 +155,31 @@ async function generateVideoClip(prompt, options = {}, referenceImageUrl = null)
     }
     
     // Extract video URL from response
-    // Note: The actual response structure may vary based on the Gemini API documentation
-    // This is a placeholder based on typical API responses
-    const videoUrl = response.data.candidates[0].content.parts.find(part => part.video)?.video.url;
-    const thumbnailUrl = response.data.candidates[0].content.parts.find(part => part.image)?.image.url;
+    let videoUrl = null;
+    let thumbnailUrl = null;
+    
+    // Look for video content in the response
+    const candidate = response.data.candidates[0];
+    if (candidate.content && candidate.content.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.video && part.video.url) {
+          videoUrl = part.video.url;
+        }
+        if (part.image && part.image.url) {
+          thumbnailUrl = part.image.url;
+        }
+      }
+    }
     
     if (!videoUrl) {
-      throw new Error('No video URL found in Gemini API response');
+      // If no video URL is found in the expected structure, try to find it elsewhere in the response
+      const responseStr = JSON.stringify(response.data);
+      const urlMatch = responseStr.match(/"url":"(https:\/\/[^"]+)"/);
+      if (urlMatch && urlMatch[1]) {
+        videoUrl = urlMatch[1];
+      } else {
+        throw new Error('No video URL found in Gemini API response');
+      }
     }
     
     return {
@@ -187,24 +191,9 @@ async function generateVideoClip(prompt, options = {}, referenceImageUrl = null)
     };
   } catch (error) {
     console.error('Error generating video clip:', error.message);
+    console.error('Error details:', error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data');
     
-    // If API call fails, fall back to mock response in production
-    if (process.env.NODE_ENV !== 'development') {
-      console.log('API call failed, falling back to mock response');
-      
-      const mockVideoUrl = `https://storage.googleapis.com/gemini-generated-videos/${uuidv4()}.mp4`;
-      const mockThumbnailUrl = `https://storage.googleapis.com/gemini-generated-videos/${uuidv4()}.jpg`;
-      
-      return {
-        videoUrl: mockVideoUrl,
-        thumbnailUrl: mockThumbnailUrl,
-        prompt,
-        options: options,
-        isMock: true,
-        error: error.message
-      };
-    }
-    
+    // Don't return fake data if the operation fails
     throw new Error(`Failed to generate video clip: ${error.message}`);
   }
 }
@@ -218,30 +207,21 @@ async function extractReferenceFrame(videoUrl) {
   console.log('Extracting reference frame from video:', videoUrl);
   
   try {
-    // Check if we're in development mode or using mock URLs
-    if (process.env.NODE_ENV === 'development' || videoUrl.includes('gemini-generated-videos')) {
-      console.log('Using mock reference frame in development mode');
-      
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Mock base64 image data
-      return 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9/KKKKAP/2Q==';
-    }
-    
-    // For actual implementation, we need to:
-    // 1. Download the video
-    // 2. Extract a frame (e.g., using ffmpeg)
-    // 3. Convert to base64
-    
     // Download video to temp file
     const tempVideoPath = path.join(__dirname, '..', 'uploads', `temp_${uuidv4()}.mp4`);
     const tempFramePath = path.join(__dirname, '..', 'uploads', `temp_${uuidv4()}.jpg`);
     
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
     const videoResponse = await axios({
       method: 'get',
       url: videoUrl,
-      responseType: 'stream'
+      responseType: 'stream',
+      timeout: 30000 // 30 second timeout
     });
     
     const writer = fs.createWriteStream(tempVideoPath);
@@ -253,7 +233,6 @@ async function extractReferenceFrame(videoUrl) {
     });
     
     // Use ffmpeg to extract a frame (requires ffmpeg to be installed)
-    // This is a placeholder - actual implementation would use a proper ffmpeg library
     const { exec } = require('child_process');
     await new Promise((resolve, reject) => {
       exec(`ffmpeg -i ${tempVideoPath} -ss 00:00:01 -frames:v 1 ${tempFramePath}`, (error) => {
@@ -277,8 +256,8 @@ async function extractReferenceFrame(videoUrl) {
   } catch (error) {
     console.error('Error extracting reference frame:', error.message);
     
-    // Fall back to mock data if extraction fails
-    return 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9/KKKKAP/2Q==';
+    // If extraction fails, don't use a reference frame
+    return null;
   }
 }
 
@@ -341,7 +320,9 @@ async function generateVideoFromScript(script, options = {}) {
       const clipData = await generateVideoClip(segments[i], clipOptions, referenceImageUrl);
       
       // Extract reference frame from generated clip for next clip's consistency
-      referenceImageUrl = await extractReferenceFrame(clipData.videoUrl);
+      if (clipData.videoUrl) {
+        referenceImageUrl = await extractReferenceFrame(clipData.videoUrl);
+      }
       
       // Store clip data
       videoRequests[requestId].clips.push({
@@ -353,13 +334,13 @@ async function generateVideoFromScript(script, options = {}) {
     }
     
     // In a real implementation, we would combine clips into a final video
-    // For now, we'll use the last clip as the final video or create a mock URL
+    // For now, we'll use the last clip as the final video
     
     let finalVideoUrl;
     if (videoRequests[requestId].clips.length > 0) {
       finalVideoUrl = videoRequests[requestId].clips[videoRequests[requestId].clips.length - 1].videoUrl;
     } else {
-      finalVideoUrl = `https://storage.googleapis.com/gemini-generated-videos/${requestId}_final.mp4`;
+      throw new Error('No clips were generated successfully');
     }
     
     // Upload to Google Drive and get direct download link
@@ -396,114 +377,66 @@ async function uploadToGoogleDrive(requestId, videoUrl) {
   console.log('Uploading video to Google Drive:', videoUrl);
   
   try {
-    // Check if we're in development mode or using mock URLs
-    if (process.env.NODE_ENV === 'development' || videoUrl.includes('gemini-generated-videos')) {
-      console.log('Using mock Google Drive response in development mode');
-      
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock Google Drive response
-      const driveFileId = uuidv4();
-      const webViewLink = `https://drive.google.com/file/d/${driveFileId}/view`;
-      const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`;
-      
-      return {
-        fileId: driveFileId,
-        webViewLink,
-        downloadUrl,
-        name: `VideoEngine_${requestId}.mp4`,
-        mimeType: 'video/mp4',
-        size: '25000000' // 25MB mock size
-      };
-    }
+    // Upload video to Google Drive
+    const videoName = `VideoEngine_${requestId}_${new Date().toISOString().replace(/[:.]/g, '-')}.mp4`;
     
-    // First download the video from the Gemini storage
-    const videoResponse = await axios({
-      method: 'get',
-      url: videoUrl,
-      responseType: 'stream'
-    });
-    
-    const tempFilePath = path.join(__dirname, '..', 'uploads', `${requestId}_temp.mp4`);
-    const writer = fs.createWriteStream(tempFilePath);
-    
-    videoResponse.data.pipe(writer);
-    
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-    
-    // Then upload to Google Drive
-    const driveResponse = await googleDriveService.uploadFile({
-      name: `VideoEngine_${requestId}.mp4`,
-      mimeType: 'video/mp4',
-      filePath: tempFilePath,
-      parents: ['root'] // Upload to root folder
-    });
-    
-    // Create a direct download link
-    const downloadUrl = await googleDriveService.createDirectDownloadLink(driveResponse.id);
-    
-    // Clean up temp file
-    fs.unlinkSync(tempFilePath);
+    const driveResponse = await googleDriveService.uploadVideoAndCreateDownloadLink(
+      videoUrl,
+      videoName,
+      'default'
+    );
     
     return {
-      ...driveResponse,
-      downloadUrl
+      fileId: driveResponse.id,
+      fileName: driveResponse.name,
+      webViewLink: driveResponse.webViewLink,
+      downloadUrl: driveResponse.directDownloadUrl
     };
   } catch (error) {
     console.error('Error uploading to Google Drive:', error.message);
     
-    // Fall back to mock response if upload fails
-    const driveFileId = uuidv4();
-    const webViewLink = `https://drive.google.com/file/d/${driveFileId}/view`;
-    const downloadUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`;
-    
+    // If Google Drive upload fails, return the original video URL
     return {
-      fileId: driveFileId,
-      webViewLink,
-      downloadUrl,
-      name: `VideoEngine_${requestId}.mp4`,
-      mimeType: 'video/mp4',
-      size: '25000000', // 25MB mock size
-      isMock: true,
-      error: error.message
+      fileId: null,
+      fileName: `VideoEngine_${requestId}.mp4`,
+      webViewLink: videoUrl,
+      downloadUrl: videoUrl
     };
   }
 }
 
 /**
- * Get the status of a video generation request
- * @param {string} requestId - Video request ID
- * @returns {object} Request status data
+ * Get video generation status
+ * @param {string} requestId - Request ID
+ * @returns {object} Request status
  */
-function getVideoRequestStatus(requestId) {
-  console.log('Getting video request status for ID:', requestId);
-  
+function getVideoStatus(requestId) {
   if (!videoRequests[requestId]) {
-    throw new Error(`Video request with ID ${requestId} not found`);
+    throw new Error(`Video request ${requestId} not found`);
   }
   
   return videoRequests[requestId];
 }
 
 /**
- * Get all video generation requests
- * @returns {Array} Array of video request data
+ * List all video requests
+ * @returns {Array} List of video requests
  */
-function getAllVideoRequests() {
-  console.log('Getting all video requests');
-  
-  return Object.values(videoRequests).sort((a, b) => {
-    return new Date(b.createdAt) - new Date(a.createdAt);
-  });
+function listVideoRequests() {
+  return Object.values(videoRequests).map(request => ({
+    id: request.id,
+    status: request.status,
+    progress: request.progress,
+    createdAt: request.createdAt,
+    completedAt: request.completedAt,
+    finalVideoUrl: request.finalVideoUrl,
+    googleDriveUrl: request.googleDriveUrl,
+    googleDriveDownloadUrl: request.googleDriveDownloadUrl
+  }));
 }
 
 module.exports = {
   generateVideoFromScript,
-  getVideoRequestStatus,
-  getAllVideoRequests,
-  parseScriptIntoSegments
+  getVideoStatus,
+  listVideoRequests
 };
