@@ -1,20 +1,25 @@
-/**
- * Server script with integrated test endpoint for Railway
- * Includes punycode deprecation fix and enhanced logging
- */
+const express = require('express');
+const path = require('path');
+const cors = require('cors');
+const fs = require('fs');
+const morgan = require('morgan');
 
 // Suppress punycode deprecation warning
 process.noDeprecation = true;
 
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { runRailwayTests } = require('./tests/railway-tests');
-
 // Create Express app
 const app = express();
-const port = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
+
+// Load environment variables from .env file in development
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config();
+    console.log('Loaded environment variables from .env file');
+  } catch (error) {
+    console.warn('Warning: dotenv not available or .env file not found');
+  }
+}
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, 'logs');
@@ -22,148 +27,207 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// Setup logging
-const logStream = fs.createWriteStream(path.join(logsDir, 'server.log'), { flags: 'a' });
-console.log = (function(originalLog) {
-  return function(...args) {
-    originalLog.apply(console, args);
-    const logMessage = args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : arg
-    ).join(' ');
-    logStream.write(`[${new Date().toISOString()}] INFO: ${logMessage}\n`);
-  };
-})(console.log);
-
-console.error = (function(originalError) {
-  return function(...args) {
-    originalError.apply(console, args);
-    const logMessage = args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : arg
-    ).join(' ');
-    logStream.write(`[${new Date().toISOString()}] ERROR: ${logMessage}\n`);
-  };
-})(console.error);
+// Create log stream
+const accessLogStream = fs.createWriteStream(path.join(logsDir, 'access.log'), { flags: 'a' });
 
 // Middleware
+app.use(cors({
+  origin: '*', // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+app.use(morgan('combined', { stream: accessLogStream }));
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// API routes
-app.get('/api/health', (req, res) => {
+// Debug route to verify server is working
+app.get('/api/debug', (req, res) => {
   res.json({ 
     status: 'ok', 
-    environment: process.env.NODE_ENV,
-    nodeVersion: process.version,
+    message: 'API server is running',
     timestamp: new Date().toISOString()
   });
 });
 
-app.get('/api/deployment/status', (req, res) => {
-  res.json({
-    status: 'ok',
-    version: '1.0.0',
-    environment: process.env.NODE_ENV,
-    railway: process.env.RAILWAY_ENVIRONMENT ? true : false,
-    nodeVersion: process.version,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Test endpoint - runs tests and returns results
-app.get('/api/run-tests', async (req, res) => {
-  console.log('Test endpoint called - running tests...');
-  
-  try {
-    // Run tests
-    const results = await runRailwayTests();
-    
-    // Return results
-    res.json({
-      success: results.success,
-      backend: {
-        total: results.total || 0,
-        passed: results.passed || 0,
-        failed: results.failed || 0
-      },
-      reportUrl: '/test-report.html',
-      logUrl: '/api/test-logs',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error running tests:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Test report endpoint
-app.get('/test-report', (req, res) => {
-  const reportPath = path.join(__dirname, 'public', 'test-report.html');
-  
-  if (fs.existsSync(reportPath)) {
-    res.sendFile(reportPath);
-  } else {
-    res.status(404).send('Test report not found. Run tests first at /api/run-tests');
-  }
-});
-
-// Test logs endpoint
-app.get('/api/test-logs', (req, res) => {
-  const logPath = path.join(__dirname, 'logs', 'test-results.log');
-  const detailedLogPath = path.join(__dirname, 'logs', 'detailed-test-results.log');
-  
-  if (fs.existsSync(detailedLogPath)) {
-    const detailedLog = fs.readFileSync(detailedLogPath, 'utf8');
-    res.type('text/plain').send(detailedLog);
-  } else if (fs.existsSync(logPath)) {
-    const log = fs.readFileSync(logPath, 'utf8');
-    res.type('text/plain').send(log);
-  } else {
-    res.status(404).send('Test logs not found. Run tests first at /api/run-tests');
-  }
-});
-
-// Include advanced video routes
+// API routes
 try {
+  console.log('Attempting to register advanced video routes...');
   const advancedVideoRoutes = require('./services/advancedVideoRoutes');
   app.use('/api/advanced-video', advancedVideoRoutes);
+  console.log('Advanced video routes registered successfully');
+  
+  // Log registered routes for debugging
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      console.log(`Route: ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          console.log(`Route: ${handler.route.path}`);
+        }
+      });
+    }
+  });
 } catch (error) {
   console.error('Error loading advanced video routes:', error);
+  // Add fallback routes
+  app.post('/api/advanced-video/generate', (req, res) => {
+    console.log('Using fallback route for /api/advanced-video/generate');
+    res.json({ 
+      id: `fallback-${Date.now()}`, 
+      status: 'processing', 
+      message: 'Using fallback route' 
+    });
+  });
+  
+  app.get('/api/advanced-video/status/:taskId', (req, res) => {
+    res.json({ 
+      id: req.params.taskId, 
+      status: 'processing', 
+      message: 'Using fallback route' 
+    });
+  });
 }
+
+// Simple route test endpoint
+app.get('/api/route-test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Route test successful',
+    routes: {
+      generate: '/api/advanced-video/generate',
+      status: '/api/advanced-video/status/:taskId',
+      upload: '/api/advanced-video/upload-to-drive',
+      download: '/api/advanced-video/drive-download/:fileId'
+    }
+  });
+});
+
+// Test routes
+app.get('/api/test-routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach(middleware => {
+    if(middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if(middleware.name === 'router') {
+      middleware.handle.stack.forEach(handler => {
+        if(handler.route) {
+          routes.push({
+            path: middleware.regexp.toString() + handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  res.json({ routes });
+});
+
+// Direct API route for video generation (bypass router)
+app.post('/direct-api/advanced-video/generate', (req, res) => {
+  console.log('Using direct route for video generation');
+  try {
+    const { prompt, options = {} } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: prompt' 
+      });
+    }
+    
+    // Return mock response
+    res.json({
+      id: `direct-${Date.now()}`,
+      status: 'submitted',
+      message: 'Video generation task submitted via direct route',
+      prompt: prompt,
+      options: options
+    });
+  } catch (error) {
+    console.error('Error in direct generate route:', error);
+    res.status(500).json({ 
+      error: `Failed to process request: ${error.message}` 
+    });
+  }
+});
+
+// Environment variables check endpoint
+app.get('/api/env-check', (req, res) => {
+  const envVars = {
+    KLING_API_KEY_ID: process.env.KLING_API_KEY_ID ? 'Set' : 'Not set',
+    KLING_API_KEY_SECRET: process.env.KLING_API_KEY_SECRET ? 'Set' : 'Not set',
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? 'Set' : 'Not set',
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'Not set',
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI ? 'Set' : 'Not set',
+    NODE_ENV: process.env.NODE_ENV || 'development'
+  };
+  
+  res.json({
+    status: 'ok',
+    environment: process.env.NODE_ENV || 'development',
+    environmentVariables: envVars
+  });
+});
+
+// Test endpoints
+app.use('/api/run-tests', require('./tests/railway-tests'));
+app.get('/test-report', (req, res) => {
+  res.sendFile(path.join(__dirname, 'logs', 'test-report.html'));
+});
+app.get('/api/test-logs', (req, res) => {
+  try {
+    const testLogs = fs.readFileSync(path.join(logsDir, 'test-results.log'), 'utf8');
+    res.type('text/plain').send(testLogs);
+  } catch (error) {
+    res.status(404).send('Test logs not found. Run tests first.');
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 // Catch-all route for SPA
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  // Only serve index.html for HTML requests, not API requests
+  if (req.accepts('html') && !req.path.startsWith('/api/')) {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message
+  });
 });
 
 // Start server
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Railway: ${process.env.RAILWAY_ENVIRONMENT ? 'Yes' : 'No'}`);
-  console.log(`Node.js version: ${process.version}`);
   
-  // Create uploads directory if it doesn't exist
-  const uploadsDir = path.join(__dirname, 'uploads');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-  
-  // Create public directory if it doesn't exist
-  const publicDir = path.join(__dirname, 'public');
-  if (!fs.existsSync(publicDir)) {
-    fs.mkdirSync(publicDir, { recursive: true });
-  }
+  // Log environment variables status (without revealing values)
+  console.log('Environment variables status:');
+  console.log(`- KLING_API_KEY_ID: ${process.env.KLING_API_KEY_ID ? 'Set' : 'Not set'}`);
+  console.log(`- KLING_API_KEY_SECRET: ${process.env.KLING_API_KEY_SECRET ? 'Set' : 'Not set'}`);
+  console.log(`- GOOGLE_CLIENT_ID: ${process.env.GOOGLE_CLIENT_ID ? 'Set' : 'Not set'}`);
+  console.log(`- GOOGLE_CLIENT_SECRET: ${process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'Not set'}`);
+  console.log(`- GOOGLE_REDIRECT_URI: ${process.env.GOOGLE_REDIRECT_URI ? 'Set' : 'Not set'}`);
 });

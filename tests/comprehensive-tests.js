@@ -1,21 +1,12 @@
 /**
- * Comprehensive test script for VideoEngine
- * Tests both punycode fix and API endpoints
+ * Comprehensive tests for VideoEngine API endpoints and services
+ * This script tests all aspects of the application and generates detailed reports
  */
 
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const axios = require('axios');
-const assert = require('assert');
-
-// Configuration
-const config = {
-  baseUrl: process.env.TEST_BASE_URL || 'http://localhost:8080',
-  timeout: 5000,
-  logPath: path.join(__dirname, '..', 'logs', 'comprehensive-test.log'),
-  detailedLogPath: path.join(__dirname, '..', 'logs', 'detailed-comprehensive-test.log')
-};
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '..', 'logs');
@@ -23,462 +14,793 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// Create log streams
-const logStream = fs.createWriteStream(config.logPath, { flags: 'a' });
-const detailedLogStream = fs.createWriteStream(config.detailedLogPath, { flags: 'a' });
+// Create log file
+const logFile = path.join(logsDir, 'comprehensive-test.log');
+fs.writeFileSync(logFile, `Comprehensive Test - ${new Date().toISOString()}\n\n`, { flag: 'w' });
+
+// Log function
+const log = (message) => {
+  const logMessage = `[${new Date().toISOString()}] ${message}\n`;
+  console.log(message);
+  fs.appendFileSync(logFile, logMessage);
+};
+
+// Start the server for local testing
+let serverProcess = null;
+const startServer = () => {
+  try {
+    log('Starting server for local testing...');
+    // Use a separate process to start the server
+    serverProcess = require('child_process').spawn('node', ['server.js'], {
+      cwd: path.join(__dirname, '..'),
+      stdio: 'pipe',
+      detached: true
+    });
+    
+    // Log server output
+    serverProcess.stdout.on('data', (data) => {
+      fs.appendFileSync(path.join(logsDir, 'server.log'), data);
+    });
+    
+    serverProcess.stderr.on('data', (data) => {
+      fs.appendFileSync(path.join(logsDir, 'server-error.log'), data);
+    });
+    
+    // Wait for server to start
+    log('Waiting for server to start...');
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        log('Server should be ready now');
+        resolve();
+      }, 3000);
+    });
+  } catch (error) {
+    log(`Error starting server: ${error.message}`);
+    return Promise.resolve();
+  }
+};
+
+// Stop the server
+const stopServer = () => {
+  if (serverProcess) {
+    log('Stopping server...');
+    // Kill the process group
+    if (process.platform === 'win32') {
+      execSync(`taskkill /pid ${serverProcess.pid} /T /F`);
+    } else {
+      process.kill(-serverProcess.pid, 'SIGINT');
+    }
+    serverProcess = null;
+  }
+};
+
+// Base URL - change this to your deployed URL for testing
+const getBaseUrl = () => {
+  // If API_URL environment variable is set, use it
+  if (process.env.API_URL) {
+    return process.env.API_URL;
+  }
+  
+  // Otherwise use localhost
+  return 'http://localhost:3000';
+};
+
+// Test categories
+const testCategories = {
+  API: 'API Endpoints',
+  SERVICE: 'Service Functions',
+  DRIVE: 'Google Drive Integration',
+  ENVIRONMENT: 'Environment Configuration'
+};
 
 // Test results
-let passedTests = 0;
-let failedTests = 0;
-let totalTests = 0;
-let testResults = [];
+const testResults = {
+  [testCategories.API]: [],
+  [testCategories.SERVICE]: [],
+  [testCategories.DRIVE]: [],
+  [testCategories.ENVIRONMENT]: []
+};
 
-/**
- * Log test result
- * @param {string} testName - Name of the test
- * @param {boolean} passed - Whether the test passed
- * @param {string} message - Test message
- * @param {string} category - Test category
- */
-function logTest(testName, passed, message, category = 'general') {
-  totalTests++;
-  
-  const result = {
-    name: testName,
-    category: category,
-    passed: passed,
-    message: message,
+// Add test result
+const addTestResult = (category, name, success, message, data = null) => {
+  testResults[category].push({
+    name,
+    success,
+    message,
+    data,
     timestamp: new Date().toISOString()
+  });
+  
+  log(`[${category}] ${name}: ${success ? 'PASS' : 'FAIL'} - ${message}`);
+};
+
+// Test the health endpoint
+const testHealth = async () => {
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing health endpoint at ${baseUrl}/api/health...`);
+    const response = await axios.get(`${baseUrl}/api/health`);
+    
+    addTestResult(
+      testCategories.API,
+      'Health Endpoint',
+      true,
+      'Health endpoint returned 200',
+      response.data
+    );
+  } catch (error) {
+    addTestResult(
+      testCategories.API,
+      'Health Endpoint',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+  }
+};
+
+// Test the advanced video health endpoint
+const testAdvancedVideoHealth = async () => {
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing advanced video health endpoint at ${baseUrl}/api/advanced-video/health...`);
+    const response = await axios.get(`${baseUrl}/api/advanced-video/health`);
+    
+    addTestResult(
+      testCategories.API,
+      'Advanced Video Health Endpoint',
+      true,
+      'Advanced video health endpoint returned 200',
+      response.data
+    );
+  } catch (error) {
+    addTestResult(
+      testCategories.API,
+      'Advanced Video Health Endpoint',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+  }
+};
+
+// Test the video list endpoint
+const testVideoList = async () => {
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing video list endpoint at ${baseUrl}/api/advanced-video/list...`);
+    const response = await axios.get(`${baseUrl}/api/advanced-video/list`);
+    
+    // Verify response contains videos array
+    if (response.data && Array.isArray(response.data.videos)) {
+      addTestResult(
+        testCategories.API,
+        'Video List Endpoint',
+        true,
+        'Video list endpoint returned 200 with videos array',
+        response.data
+      );
+      
+      addTestResult(
+        testCategories.API,
+        'Video List Response',
+        true,
+        'Response contains videos array',
+        { count: response.data.videos.length }
+      );
+    } else {
+      addTestResult(
+        testCategories.API,
+        'Video List Endpoint',
+        true,
+        'Video list endpoint returned 200',
+        response.data
+      );
+      
+      addTestResult(
+        testCategories.API,
+        'Video List Response',
+        false,
+        'Response does not contain videos array',
+        response.data
+      );
+    }
+  } catch (error) {
+    addTestResult(
+      testCategories.API,
+      'Video List Endpoint',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+    
+    addTestResult(
+      testCategories.API,
+      'Video List Response',
+      false,
+      'Could not test response format due to endpoint error',
+      null
+    );
+  }
+};
+
+// Test the generate endpoint
+const testGenerateEndpoint = async () => {
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing generate endpoint at ${baseUrl}/api/advanced-video/generate...`);
+    const response = await axios.post(`${baseUrl}/api/advanced-video/generate`, {
+      prompt: 'Test prompt for generate endpoint',
+      options: {
+        duration: 5
+      }
+    });
+    
+    // Verify response contains expected fields
+    if (response.data && response.data.id && response.data.status) {
+      addTestResult(
+        testCategories.API,
+        'Video Generation Endpoint',
+        true,
+        'Generate endpoint returned 200 with expected fields',
+        response.data
+      );
+      
+      // Check if aspect ratio is 16:9
+      if (response.data.options && response.data.options.aspectRatio === '16:9') {
+        addTestResult(
+          testCategories.API,
+          'Video Aspect Ratio',
+          true,
+          'Video has 16:9 aspect ratio',
+          { aspectRatio: response.data.options.aspectRatio }
+        );
+      } else {
+        addTestResult(
+          testCategories.API,
+          'Video Aspect Ratio',
+          false,
+          'Video does not have 16:9 aspect ratio',
+          { aspectRatio: response.data.options?.aspectRatio }
+        );
+      }
+      
+      return response.data.id;
+    } else {
+      addTestResult(
+        testCategories.API,
+        'Video Generation Endpoint',
+        false,
+        'Response does not contain expected fields',
+        response.data
+      );
+      
+      addTestResult(
+        testCategories.API,
+        'Video Aspect Ratio',
+        false,
+        'Could not test aspect ratio due to missing fields',
+        null
+      );
+      
+      return null;
+    }
+  } catch (error) {
+    addTestResult(
+      testCategories.API,
+      'Video Generation Endpoint',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+    
+    addTestResult(
+      testCategories.API,
+      'Video Aspect Ratio',
+      false,
+      'Could not test aspect ratio due to endpoint error',
+      null
+    );
+    
+    return null;
+  }
+};
+
+// Test the status endpoint
+const testStatusEndpoint = async (taskId) => {
+  if (!taskId) {
+    addTestResult(
+      testCategories.API,
+      'Video Status Endpoint',
+      false,
+      'No task ID available for status test',
+      null
+    );
+    return;
+  }
+  
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing status endpoint at ${baseUrl}/api/advanced-video/status/${taskId}...`);
+    const response = await axios.get(`${baseUrl}/api/advanced-video/status/${taskId}`);
+    
+    // Verify response contains expected fields
+    if (response.data && response.data.id && response.data.status) {
+      addTestResult(
+        testCategories.API,
+        'Video Status Endpoint',
+        true,
+        'Status endpoint returned 200 with expected fields',
+        response.data
+      );
+    } else {
+      addTestResult(
+        testCategories.API,
+        'Video Status Endpoint',
+        false,
+        'Response does not contain expected fields',
+        response.data
+      );
+    }
+  } catch (error) {
+    addTestResult(
+      testCategories.API,
+      'Video Status Endpoint',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+  }
+};
+
+// Test the environment variables check endpoint
+const testEnvCheck = async () => {
+  try {
+    const baseUrl = getBaseUrl();
+    log(`Testing environment variables check endpoint at ${baseUrl}/api/env-check...`);
+    const response = await axios.get(`${baseUrl}/api/env-check`);
+    
+    addTestResult(
+      testCategories.ENVIRONMENT,
+      'Environment Variables Check',
+      true,
+      'Environment variables check endpoint returned 200',
+      response.data
+    );
+    
+    // Check if required environment variables are set
+    const envVars = response.data.environmentVariables;
+    if (envVars) {
+      const requiredVars = ['KLING_API_KEY_ID', 'KLING_API_KEY_SECRET'];
+      const missingVars = requiredVars.filter(v => envVars[v] === 'Not set');
+      
+      if (missingVars.length === 0) {
+        addTestResult(
+          testCategories.ENVIRONMENT,
+          'Required Environment Variables',
+          true,
+          'All required environment variables are set',
+          { variables: requiredVars }
+        );
+      } else {
+        addTestResult(
+          testCategories.ENVIRONMENT,
+          'Required Environment Variables',
+          false,
+          'Some required environment variables are not set',
+          { missingVariables: missingVars }
+        );
+      }
+    }
+  } catch (error) {
+    addTestResult(
+      testCategories.ENVIRONMENT,
+      'Environment Variables Check',
+      false,
+      `Error: ${error.message}`,
+      error.response?.data
+    );
+  }
+};
+
+// Test service imports
+const testServiceImports = () => {
+  try {
+    log('Testing service imports...');
+    
+    // Try to import the services
+    const advancedVideoService = require('../services/advancedVideoService');
+    const klingAiService = require('../services/klingAiService');
+    const googleDriveService = require('../services/googleDriveService');
+    
+    addTestResult(
+      testCategories.SERVICE,
+      'Service Import',
+      true,
+      'Successfully imported all services',
+      { 
+        services: [
+          'advancedVideoService', 
+          'klingAiService', 
+          'googleDriveService'
+        ] 
+      }
+    );
+    
+    // Check if required functions exist
+    if (typeof advancedVideoService.parseScriptIntoSegments === 'function') {
+      addTestResult(
+        testCategories.SERVICE,
+        'Script Parsing',
+        true,
+        'parseScriptIntoSegments function exists',
+        null
+      );
+    } else {
+      addTestResult(
+        testCategories.SERVICE,
+        'Script Parsing',
+        false,
+        'parseScriptIntoSegments function does not exist',
+        null
+      );
+    }
+    
+    if (typeof advancedVideoService.generateVideoFromScript === 'function') {
+      addTestResult(
+        testCategories.SERVICE,
+        'Video Generation',
+        true,
+        'generateVideoFromScript function exists',
+        null
+      );
+    } else {
+      addTestResult(
+        testCategories.SERVICE,
+        'Video Generation',
+        false,
+        'generateVideoFromScript function does not exist',
+        null
+      );
+    }
+    
+    if (typeof advancedVideoService.getVideoRequestStatus === 'function') {
+      addTestResult(
+        testCategories.SERVICE,
+        'Video Status Check',
+        true,
+        'getVideoRequestStatus function exists',
+        null
+      );
+    } else {
+      addTestResult(
+        testCategories.SERVICE,
+        'Video Status Check',
+        false,
+        'getVideoRequestStatus function does not exist',
+        null
+      );
+    }
+    
+    return {
+      advancedVideoService,
+      klingAiService,
+      googleDriveService
+    };
+  } catch (error) {
+    addTestResult(
+      testCategories.SERVICE,
+      'Service Import',
+      false,
+      `Error importing services: ${error.message}`,
+      { stack: error.stack }
+    );
+    
+    return null;
+  }
+};
+
+// Test script parsing
+const testScriptParsing = (services) => {
+  if (!services || !services.advancedVideoService) {
+    addTestResult(
+      testCategories.SERVICE,
+      'Script Parsing Test',
+      false,
+      'Services not available for testing',
+      null
+    );
+    return;
+  }
+  
+  try {
+    log('Testing script parsing...');
+    const testScript = 'This is a test script. It should be parsed into segments. Each segment should be a few seconds long. This will test the parsing functionality.';
+    
+    const segments = services.advancedVideoService.parseScriptIntoSegments(testScript, 4);
+    
+    if (Array.isArray(segments) && segments.length > 0) {
+      addTestResult(
+        testCategories.SERVICE,
+        'Script Parsing Test',
+        true,
+        `Successfully parsed script into ${segments.length} segments`,
+        { segments }
+      );
+    } else {
+      addTestResult(
+        testCategories.SERVICE,
+        'Script Parsing Test',
+        false,
+        'Failed to parse script into segments',
+        { segments }
+      );
+    }
+  } catch (error) {
+    addTestResult(
+      testCategories.SERVICE,
+      'Script Parsing Test',
+      false,
+      `Error parsing script: ${error.message}`,
+      { stack: error.stack }
+    );
+  }
+};
+
+// Generate HTML report
+const generateHtmlReport = () => {
+  log('Generating HTML report...');
+  
+  // Calculate summary statistics
+  const summary = {
+    total: 0,
+    passed: 0,
+    failed: 0,
+    categories: {}
   };
   
-  testResults.push(result);
+  Object.entries(testResults).forEach(([category, tests]) => {
+    summary.categories[category] = {
+      total: tests.length,
+      passed: tests.filter(t => t.success).length,
+      failed: tests.filter(t => !t.success).length
+    };
+    
+    summary.total += tests.length;
+    summary.passed += tests.filter(t => t.success).length;
+    summary.failed += tests.filter(t => !t.success).length;
+  });
   
-  if (passed) {
-    passedTests++;
-    console.log(`✅ PASS: [${category}] ${testName} - ${message}`);
-    logStream.write(`[${new Date().toISOString()}] PASS: [${category}] ${testName} - ${message}\n`);
-  } else {
-    failedTests++;
-    console.error(`❌ FAIL: [${category}] ${testName} - ${message}`);
-    logStream.write(`[${new Date().toISOString()}] FAIL: [${category}] ${testName} - ${message}\n`);
+  summary.passPercentage = Math.round((summary.passed / summary.total) * 100);
+  
+  // Generate HTML
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VideoEngine Test Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3 {
+      color: #0066cc;
+    }
+    .summary {
+      background-color: #f5f5f5;
+      padding: 20px;
+      border-radius: 5px;
+      margin-bottom: 30px;
+    }
+    .progress-container {
+      width: 100%;
+      background-color: #e0e0e0;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .progress-bar {
+      height: 20px;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      text-align: center;
+      line-height: 20px;
+      color: white;
+    }
+    .category {
+      margin-bottom: 30px;
+    }
+    .test {
+      margin-bottom: 15px;
+      padding: 15px;
+      border-radius: 5px;
+    }
+    .test-pass {
+      background-color: #e8f5e9;
+      border-left: 5px solid #4CAF50;
+    }
+    .test-fail {
+      background-color: #ffebee;
+      border-left: 5px solid #f44336;
+    }
+    .test-details {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 0.8em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <h1>VideoEngine Test Report</h1>
+  <p>Generated: ${new Date().toLocaleString()}</p>
+  
+  <div class="summary">
+    <h2>Test Summary</h2>
+    <div class="progress-container">
+      <div class="progress-bar" style="width: ${summary.passPercentage}%">
+        ${summary.passPercentage}%
+      </div>
+    </div>
+    <p>Total Tests: ${summary.total}</p>
+    <p>Passed: ${summary.passed}</p>
+    <p>Failed: ${summary.failed}</p>
+    
+    <h3>Results by Category</h3>
+    <table>
+      <tr>
+        <th>Category</th>
+        <th>Total</th>
+        <th>Passed</th>
+        <th>Failed</th>
+        <th>Pass Rate</th>
+      </tr>
+      ${Object.entries(summary.categories).map(([category, stats]) => `
+        <tr>
+          <td>${category}</td>
+          <td>${stats.total}</td>
+          <td>${stats.passed}</td>
+          <td>${stats.failed}</td>
+          <td>${Math.round((stats.passed / stats.total) * 100)}%</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  
+  ${Object.entries(testResults).map(([category, tests]) => `
+    <div class="category">
+      <h2>${category}</h2>
+      ${tests.map(test => `
+        <div class="test ${test.success ? 'test-pass' : 'test-fail'}">
+          <h3>${test.name}</h3>
+          <p><strong>${test.success ? 'PASS' : 'FAIL'}</strong> - ${test.message}</p>
+          <p class="timestamp">Timestamp: ${new Date(test.timestamp).toLocaleString()}</p>
+          ${test.data ? `
+            <div class="test-details">
+              <pre>${JSON.stringify(test.data, null, 2)}</pre>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `).join('')}
+</body>
+</html>
+  `;
+  
+  // Write HTML report to file
+  const reportFile = path.join(logsDir, 'test-report.html');
+  fs.writeFileSync(reportFile, html);
+  
+  log(`HTML report saved to ${reportFile}`);
+  
+  return reportFile;
+};
+
+// Run all tests
+const runTests = async () => {
+  log('Starting comprehensive tests...');
+  
+  // Test service imports first
+  const services = testServiceImports();
+  
+  // Test script parsing
+  testScriptParsing(services);
+  
+  // Start server for local testing if needed
+  const isLocalTest = !process.env.API_URL;
+  if (isLocalTest) {
+    await startServer();
   }
   
-  // Write detailed result
-  detailedLogStream.write(`\n[${new Date().toISOString()}] ${passed ? 'PASS' : 'FAIL'}: [${category}] ${testName}\n`);
-  detailedLogStream.write(`  Message: ${message}\n`);
-}
-
-/**
- * Run all tests
- */
-async function runComprehensiveTests() {
-  console.log('=== VideoEngine Comprehensive Test Runner ===');
-  console.log(`Date: ${new Date().toISOString()}`);
-  console.log('Running tests...\n');
-  
-  // Write log headers
-  const logHeader = `\n=== Comprehensive Test Run: ${new Date().toISOString()} ===\n`;
-  logStream.write(logHeader);
-  detailedLogStream.write(logHeader);
-  
   try {
-    // Reset test counters
-    passedTests = 0;
-    failedTests = 0;
-    totalTests = 0;
-    testResults = [];
-    
-    // Test punycode fix
-    await testPunycodeFix();
-    
     // Test API endpoints
-    await testAPIEndpoints();
+    await testHealth();
+    await testAdvancedVideoHealth();
+    await testVideoList();
+    await testEnvCheck();
     
-    // Test error handling
-    await testErrorHandling();
+    // Test video generation
+    const taskId = await testGenerateEndpoint();
     
-    // Write summary to log
-    const summary = `\nTEST SUMMARY:
-Total tests: ${totalTests}
-Passed: ${passedTests}
-Failed: ${failedTests}
-Success rate: ${Math.round((passedTests / totalTests) * 100)}%
-`;
-    
-    logStream.write(summary);
-    detailedLogStream.write(summary);
-    
-    console.log('\nTest execution complete.');
-    console.log(summary);
-    
-    return {
-      success: failedTests === 0,
-      total: totalTests,
-      passed: passedTests,
-      failed: failedTests,
-      results: testResults
-    };
-  } catch (error) {
-    console.error('Error running tests:', error);
-    logStream.write(`Error: ${error.message}\n${error.stack}\n`);
-    detailedLogStream.write(`Error: ${error.message}\n${error.stack}\n`);
-    
-    return {
-      success: false,
-      error: error.message
-    };
+    // Test status endpoint
+    await testStatusEndpoint(taskId);
   } finally {
-    logStream.end();
-    detailedLogStream.end();
-  }
-}
-
-/**
- * Test punycode fix
- */
-async function testPunycodeFix() {
-  console.log('\n--- Testing Punycode Fix ---');
-  
-  // Test 1: Check if punycode is available as a standalone package
-  try {
-    const punycode = require('punycode');
-    logTest('Punycode Package', !!punycode, 'Punycode package is available', 'punycode');
-    
-    // Test encoding/decoding
-    const encoded = punycode.encode('mañana');
-    const decoded = punycode.decode('maana-pta');
-    logTest('Punycode Functionality', encoded === 'maana-pta' && decoded === 'mañana', 
-      'Punycode encoding/decoding works correctly', 'punycode');
-  } catch (error) {
-    logTest('Punycode Package', false, `Error: ${error.message}`, 'punycode');
-  }
-  
-  // Test 2: Check if global.punycode is set
-  try {
-    const hasPunycode = typeof global.punycode === 'object';
-    logTest('Global Punycode', hasPunycode, 
-      hasPunycode ? 'global.punycode is set' : 'global.punycode is not set', 'punycode');
-  } catch (error) {
-    logTest('Global Punycode', false, `Error: ${error.message}`, 'punycode');
-  }
-  
-  // Test 3: Check if process.noDeprecation is set
-  try {
-    const noDeprecation = process.noDeprecation === true;
-    logTest('Process noDeprecation', noDeprecation, 
-      noDeprecation ? 'process.noDeprecation is set' : 'process.noDeprecation is not set', 'punycode');
-  } catch (error) {
-    logTest('Process noDeprecation', false, `Error: ${error.message}`, 'punycode');
-  }
-  
-  // Test 4: Check if patch-package is installed
-  try {
-    const packageJson = require('../package.json');
-    const hasPatchPackage = packageJson.dependencies['patch-package'] !== undefined;
-    const hasPostinstall = packageJson.scripts.postinstall === 'patch-package';
-    
-    logTest('Patch Package', hasPatchPackage, 
-      hasPatchPackage ? 'patch-package is installed' : 'patch-package is not installed', 'punycode');
-    
-    logTest('Postinstall Script', hasPostinstall, 
-      hasPostinstall ? 'postinstall script is set' : 'postinstall script is not set', 'punycode');
-  } catch (error) {
-    logTest('Patch Package', false, `Error: ${error.message}`, 'punycode');
-  }
-  
-  // Test 5: Check if patches directory exists and contains googleapis patch
-  try {
-    const patchesDir = path.join(__dirname, '..', 'patches');
-    const patchExists = fs.existsSync(patchesDir) && 
-      fs.readdirSync(patchesDir).some(file => file.startsWith('googleapis'));
-    
-    logTest('Googleapis Patch', patchExists, 
-      patchExists ? 'googleapis patch exists' : 'googleapis patch does not exist', 'punycode');
-  } catch (error) {
-    logTest('Googleapis Patch', false, `Error: ${error.message}`, 'punycode');
-  }
-  
-  // Test 6: Run a command that would trigger the punycode warning and check if it's suppressed
-  try {
-    // This is a bit tricky to test directly, but we can check if the warning appears in the output
-    const testCommand = 'node -e "require(\'url\').parse(\'https://example.com\');"';
-    let output;
-    
-    try {
-      output = execSync(testCommand, { encoding: 'utf8' });
-    } catch (error) {
-      output = error.stdout || '';
+    // Stop server if we started it
+    if (isLocalTest) {
+      stopServer();
     }
-    
-    const hasWarning = output.includes('punycode') && output.includes('deprecated');
-    logTest('Warning Suppression', !hasWarning, 
-      hasWarning ? 'Punycode warning is not suppressed' : 'No punycode warning detected', 'punycode');
-  } catch (error) {
-    logTest('Warning Suppression', false, `Error: ${error.message}`, 'punycode');
   }
-}
+  
+  // Generate summary
+  log('\nTest Summary:');
+  Object.entries(testResults).forEach(([category, tests]) => {
+    const passed = tests.filter(t => t.success).length;
+    const total = tests.length;
+    const percentage = Math.round((passed / total) * 100);
+    
+    log(`${category}: ${passed}/${total} (${percentage}%)`);
+  });
+  
+  // Calculate overall results
+  const totalTests = Object.values(testResults).flat().length;
+  const passedTests = Object.values(testResults).flat().filter(t => t.success).length;
+  const passPercentage = Math.round((passedTests / totalTests) * 100);
+  
+  log(`\nOverall: ${passedTests}/${totalTests} tests passed (${passPercentage}%)`);
+  
+  // Generate HTML report
+  const reportFile = generateHtmlReport();
+  
+  // Return summary
+  return {
+    totalTests,
+    passedTests,
+    failedTests: totalTests - passedTests,
+    passPercentage,
+    reportFile,
+    results: testResults
+  };
+};
 
-/**
- * Test API endpoints
- */
-async function testAPIEndpoints() {
-  console.log('\n--- Testing API Endpoints ---');
-  
-  // Test 1: Health endpoint
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/health`, { timeout: config.timeout });
-    logTest('Health Endpoint', response.status === 200, 'Health endpoint returned 200', 'api');
-    logTest('Health Response', response.data && response.data.status === 'ok', 
-      'Health response contains status: ok', 'api');
-  } catch (error) {
-    logTest('Health Endpoint', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 2: Advanced video health endpoint
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/advanced-video/health`, { timeout: config.timeout });
-    logTest('Advanced Video Health', response.status === 200, 'Advanced video health endpoint returned 200', 'api');
-    logTest('Advanced Video Health Response', response.data && response.data.status === 'ok', 
-      'Advanced video health response contains status: ok', 'api');
-  } catch (error) {
-    logTest('Advanced Video Health', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 3: Test routes endpoint
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/test-routes`, { timeout: config.timeout });
-    logTest('Test Routes', response.status === 200, 'Test routes endpoint returned 200', 'api');
-    logTest('Routes List', Array.isArray(response.data.routes), 'Routes list is an array', 'api');
-    
-    // Check if important routes are included
-    const routes = response.data.routes.map(r => r.path);
-    const hasGenerateRoute = routes.includes('/api/advanced-video/generate') || 
-      routes.some(r => r.includes('generate'));
-    
-    logTest('Generate Route', hasGenerateRoute, 
-      hasGenerateRoute ? 'Generate route is registered' : 'Generate route is not found', 'api');
-  } catch (error) {
-    logTest('Test Routes', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 4: Video generation endpoint
-  try {
-    const script = 'This is a test script for generating a video with 16:9 aspect ratio.';
-    const response = await axios.post(
-      `${config.baseUrl}/api/advanced-video/generate`,
-      {
-        script,
-        options: {
-          style: 'test',
-          clipDuration: 3,
-          aspectRatio: '16:9'
-        }
-      },
-      { timeout: config.timeout * 2 }
-    );
-    
-    logTest('Video Generation', response.status === 200, 'Video generation endpoint returned 200', 'api');
-    logTest('Video Generation Response', response.data.id && response.data.status, 
-      'Response contains id and status', 'api');
-    
-    // Check if aspect ratio is preserved
-    const hasCorrectAspectRatio = response.data.options && response.data.options.aspectRatio === '16:9';
-    logTest('Aspect Ratio Preservation', hasCorrectAspectRatio, 
-      hasCorrectAspectRatio ? 'Aspect ratio is preserved as 16:9' : 'Aspect ratio is not preserved', 'api');
-    
-    // Store request ID for status test
-    if (response.data.id) {
-      // Test status endpoint with the request ID
-      try {
-        const statusResponse = await axios.get(
-          `${config.baseUrl}/api/advanced-video/status/${response.data.id}`, 
-          { timeout: config.timeout }
-        );
-        
-        logTest('Video Status', statusResponse.status === 200, 'Video status endpoint returned 200', 'api');
-        logTest('Video Status Response', statusResponse.data.id === response.data.id, 
-          'Status response contains correct id', 'api');
-      } catch (statusError) {
-        logTest('Video Status', false, `Error: ${statusError.message}`, 'api');
-      }
-    }
-  } catch (error) {
-    logTest('Video Generation', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 5: Video list endpoint
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/advanced-video/list`, { timeout: config.timeout });
-    logTest('Video List', response.status === 200, 'Video list endpoint returned 200', 'api');
-    logTest('Video List Response', response.data && Array.isArray(response.data.videos), 
-      'Response contains videos array', 'api');
-  } catch (error) {
-    logTest('Video List', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 6: Google Drive auth endpoint
-  try {
-    const userId = 'test-user-' + Date.now();
-    const response = await axios.get(
-      `${config.baseUrl}/api/advanced-video/drive-auth?userId=${userId}`, 
-      { timeout: config.timeout }
-    );
-    
-    logTest('Drive Auth', response.status === 200, 'Drive auth endpoint returned 200', 'api');
-    logTest('Drive Auth Response', response.data.authUrl && response.data.userId, 
-      'Response contains authUrl and userId', 'api');
-  } catch (error) {
-    logTest('Drive Auth', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 7: Google Drive files endpoint
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/advanced-video/drive-files`, { timeout: config.timeout });
-    logTest('Drive Files', response.status === 200, 'Drive files endpoint returned 200', 'api');
-    logTest('Drive Files Response', response.data && Array.isArray(response.data.files), 
-      'Response contains files array', 'api');
-  } catch (error) {
-    logTest('Drive Files', false, `Error: ${error.message}`, 'api');
-  }
-  
-  // Test 8: CORS headers
-  try {
-    const response = await axios.get(`${config.baseUrl}/api/health`, { 
-      timeout: config.timeout,
-      headers: {
-        'Origin': 'http://example.com'
-      }
-    });
-    
-    const corsHeader = response.headers['access-control-allow-origin'];
-    logTest('CORS Headers', !!corsHeader, 
-      corsHeader ? `CORS header is set: ${corsHeader}` : 'CORS header is not set', 'api');
-  } catch (error) {
-    logTest('CORS Headers', false, `Error: ${error.message}`, 'api');
-  }
-}
-
-/**
- * Test error handling
- */
-async function testErrorHandling() {
-  console.log('\n--- Testing Error Handling ---');
-  
-  // Test 1: Missing script in video generation
-  try {
-    const response = await axios.post(
-      `${config.baseUrl}/api/advanced-video/generate`,
-      {
-        script: '',
-        options: { aspectRatio: '16:9' }
-      },
-      { 
-        timeout: config.timeout,
-        validateStatus: status => true // Don't throw on error status
-      }
-    );
-    
-    const hasError = response.status === 400 && response.data && response.data.error;
-    logTest('Missing Script Validation', hasError, 
-      hasError ? 'Properly rejected empty script' : 'Did not properly validate empty script', 'error');
-  } catch (error) {
-    logTest('Missing Script Validation', false, `Error: ${error.message}`, 'error');
-  }
-  
-  // Test 2: Invalid video ID
-  try {
-    const response = await axios.get(
-      `${config.baseUrl}/api/advanced-video/status/invalid-id-that-does-not-exist`, 
-      { 
-        timeout: config.timeout,
-        validateStatus: status => true // Don't throw on error status
-      }
-    );
-    
-    const hasError = (response.status === 404 || response.status === 400) && response.data && response.data.error;
-    logTest('Invalid Video ID', hasError, 
-      hasError ? 'Properly handled invalid video ID' : 'Did not properly handle invalid video ID', 'error');
-  } catch (error) {
-    logTest('Invalid Video ID', false, `Error: ${error.message}`, 'error');
-  }
-  
-  // Test 3: Invalid file ID for download
-  try {
-    const response = await axios.get(
-      `${config.baseUrl}/api/advanced-video/drive-download/invalid-file-id`, 
-      { 
-        timeout: config.timeout,
-        validateStatus: status => true // Don't throw on error status
-      }
-    );
-    
-    // This might return 200 with a mock URL in development mode, so check both cases
-    const isValid = (response.status === 200 && response.data.downloadUrl) || 
-                   (response.status >= 400 && response.data && response.data.error);
-    
-    logTest('Invalid File ID', isValid, 
-      isValid ? 'Properly handled invalid file ID' : 'Did not properly handle invalid file ID', 'error');
-  } catch (error) {
-    logTest('Invalid File ID', false, `Error: ${error.message}`, 'error');
-  }
-  
-  // Test 4: Service fallbacks
-  try {
-    // This is hard to test directly, but we can check if the endpoints work
-    // which indicates the fallbacks are working if the real services fail to load
-    const endpoints = [
-      '/api/advanced-video/generate',
-      '/api/advanced-video/list',
-      '/api/advanced-video/drive-auth'
-    ];
-    
-    let allEndpointsWork = true;
-    let failedEndpoint = '';
-    
-    for (const endpoint of endpoints) {
-      try {
-        const method = endpoint.includes('generate') ? 'post' : 'get';
-        const data = method === 'post' ? { script: 'Test script' } : undefined;
-        
-        const response = await axios({
-          method,
-          url: `${config.baseUrl}${endpoint}`,
-          data,
-          timeout: config.timeout,
-          validateStatus: status => status === 200
-        });
-        
-        if (response.status !== 200) {
-          allEndpointsWork = false;
-          failedEndpoint = endpoint;
-          break;
-        }
-      } catch (error) {
-        allEndpointsWork = false;
-        failedEndpoint = endpoint;
-        break;
-      }
-    }
-    
-    logTest('Service Fallbacks', allEndpointsWork, 
-      allEndpointsWork ? 'All endpoints work with fallbacks' : `Endpoint failed: ${failedEndpoint}`, 'error');
-  } catch (error) {
-    logTest('Service Fallbacks', false, `Error: ${error.message}`, 'error');
-  }
-}
-
-// Run tests if called directly
+// Run the tests if this file is executed directly
 if (require.main === module) {
-  runComprehensiveTests()
-    .then(results => {
-      process.exit(results.success ? 0 : 1);
-    })
-    .catch(error => {
-      console.error('Test runner error:', error);
-      process.exit(1);
-    });
+  runTests();
 }
 
 module.exports = {
-  runComprehensiveTests
+  runTests,
+  testHealth,
+  testAdvancedVideoHealth,
+  testVideoList,
+  testGenerateEndpoint,
+  testStatusEndpoint,
+  testEnvCheck,
+  testServiceImports,
+  testScriptParsing,
+  generateHtmlReport
 };

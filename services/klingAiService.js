@@ -4,9 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const { extractKeywords } = require('./keywordExtractor');
 
-// Kling AI credentials
-const ACCESS_KEY_ID = 'cd7782f741d845d4b2b6a27df23880de';
-const ACCESS_KEY_SECRET = '30d2eaf0dc9d41d59850da4061a83c93';
+// Get Kling AI credentials from environment variables
+const ACCESS_KEY_ID = process.env.KLING_API_KEY_ID || '';
+const ACCESS_KEY_SECRET = process.env.KLING_API_KEY_SECRET || '';
 
 // Kling AI API endpoint
 const KLING_API_ENDPOINT = 'https://app.klingai.com/v1/videos/text2video';
@@ -40,6 +40,11 @@ function generateAuthToken() {
 async function generateVideo(prompt, options = {}) {
   try {
     console.log(`Generating video with prompt: ${prompt}`);
+    
+    // Check if API credentials are available
+    if (!ACCESS_KEY_ID || !ACCESS_KEY_SECRET) {
+      throw new Error('Kling AI API credentials not found in environment variables. Please set KLING_API_KEY_ID and KLING_API_KEY_SECRET.');
+    }
     
     // Extract keywords from prompt for better video generation
     const keywords = extractKeywords(prompt);
@@ -115,6 +120,11 @@ async function generateVideo(prompt, options = {}) {
 async function checkVideoStatus(taskId) {
   try {
     console.log(`Checking status for task: ${taskId}`);
+    
+    // Check if API credentials are available
+    if (!ACCESS_KEY_ID || !ACCESS_KEY_SECRET) {
+      throw new Error('Kling AI API credentials not found in environment variables. Please set KLING_API_KEY_ID and KLING_API_KEY_SECRET.');
+    }
     
     // Generate authentication token
     const authToken = generateAuthToken();

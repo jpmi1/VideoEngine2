@@ -1,111 +1,109 @@
-# VideoEngine with 16:9 Aspect Ratio and Google Drive Integration
+# VideoEngine with Kling AI Integration
 
-This application generates videos using Gemini Veo 2 with 16:9 aspect ratio and provides direct download links from Google Drive.
+This application provides video generation capabilities using Kling AI with 16:9 aspect ratio and Google Drive integration for direct downloads.
 
-## Features
+## Environment Variables Setup
 
-- **16:9 Aspect Ratio Videos**: All generated videos maintain a 16:9 aspect ratio (1920x1080)
-- **Google Drive Integration**: Videos are uploaded to Google Drive with direct download links
-- **Test-Time Training**: Maintains consistency between clips using reference frames
-- **Script Parsing**: Automatically breaks scripts into 3-4 second clips
-- **Responsive UI**: Clean interface for video generation and management
-- **Comprehensive Testing**: Includes frontend and backend testing scripts
+This application uses environment variables for secure credential management. You need to set up the following environment variables:
 
-## Setup Instructions
-
-### Prerequisites
-
-- Node.js (v14+)
-- npm or yarn
-- ffmpeg (for reference frame extraction)
-
-### Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
+### Required Environment Variables
 
 ```
-GEMINI_API_KEY=your_gemini_api_key_here
-GOOGLE_CLIENT_ID=your_google_client_id_here
-GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-GOOGLE_REDIRECT_URI=https://your-app-url.up.railway.app/api/advanced-video/drive-callback
-NODE_ENV=production
-PORT=8080
+# Kling AI API Credentials
+KLING_API_KEY_ID=your_kling_api_key_id
+KLING_API_KEY_SECRET=your_kling_api_key_secret
+
+# Google Drive API Credentials (for Drive integration)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=your_google_redirect_uri
 ```
 
-### Installation
+### Setting Up Environment Variables
 
-1. Clone this repository
+#### For Development
+
+1. Create a `.env` file in the root directory of the project
+2. Add the environment variables as shown above
+3. The application will automatically load these variables in development mode
+
+Example `.env` file:
+```
+KLING_API_KEY_ID=cd7782f741d845d4b2b6a27df23880de
+KLING_API_KEY_SECRET=30d2eaf0dc9d41d59850da4061a83c93
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+```
+
+#### For Railway Deployment
+
+1. Go to your Railway project dashboard
+2. Navigate to the "Variables" tab
+3. Add each environment variable with its corresponding value
+4. Deploy your application
+
+## Installation and Setup
+
+1. Clone the repository
 2. Install dependencies:
    ```
    npm install
    ```
-3. Start the server:
+3. Set up environment variables as described above
+4. Start the server:
    ```
    npm start
    ```
 
-## Google Drive Setup
+## API Endpoints
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project
-3. Enable the Google Drive API
-4. Create OAuth 2.0 credentials (Web application)
-5. Set the authorized redirect URI to match your GOOGLE_REDIRECT_URI
-6. Add the Client ID and Client Secret to your environment variables
+### Video Generation
 
-## Usage
+- `POST /api/advanced-video/generate` - Generate a video with Kling AI
+  - Request body:
+    ```json
+    {
+      "prompt": "A beautiful mountain landscape with a flowing river",
+      "options": {
+        "duration": 10,
+        "enhancePrompt": true
+      }
+    }
+    ```
 
-1. Navigate to the application in your browser
-2. Authenticate with Google Drive using the "Connect to Google Drive" button
-3. Enter a script in the text area
-4. Click "Generate Video" to start the generation process
-5. Once complete, use the "Download from Google Drive" button to download your video
+- `GET /api/advanced-video/status/:taskId` - Check video generation status
+
+### Google Drive Integration
+
+- `POST /api/advanced-video/upload-to-drive` - Upload a video to Google Drive
+  - Request body:
+    ```json
+    {
+      "videoUrl": "https://example.com/video.mp4",
+      "fileName": "my_video.mp4"
+    }
+    ```
+
+- `GET /api/advanced-video/drive-download/:fileId` - Get a direct download link
+
+### Testing and Monitoring
+
+- `GET /api/env-check` - Check environment variables status
+- `GET /api/health` - Health check endpoint
+- `GET /api/run-tests` - Run tests
+- `GET /test-report` - View test report
+- `GET /api/test-logs` - View test logs
 
 ## Testing
 
-This package includes comprehensive testing scripts to verify functionality:
-
-### Running Backend Tests
-
-```bash
-node tests/run-tests.js
+Run the tests:
+```
+node tests/kling-ai-test.js
 ```
 
-This will run all backend tests and generate an HTML test report at `tests/test-report.html`.
+## Security Notes
 
-### Running Frontend Tests
-
-1. Open the application in your browser
-2. Look for the "Run Frontend Tests" button in the bottom right corner
-3. Click the button to run the tests
-4. Test results will appear on the page
-
-## Fixed Issues
-
-The following issues have been fixed in this version:
-
-1. **DOM Element Null Errors**: Added proper null checks before accessing DOM elements
-2. **Event Handler Errors**: Implemented safer event listeners with existence verification
-3. **Error Handling**: Added comprehensive error handling throughout the application
-4. **Testing**: Added frontend and backend testing scripts to verify functionality
-
-## API Endpoints
-
-- `POST /api/advanced-video/generate` - Generate a video from a script
-- `GET /api/advanced-video/status/:id` - Get video generation status
-- `GET /api/advanced-video/list` - List all video generation requests
-- `POST /api/advanced-video/upload-to-drive` - Upload a video to Google Drive
-- `GET /api/advanced-video/drive-auth` - Get Google Drive authentication URL
-- `GET /api/advanced-video/drive-files` - List files from Google Drive
-- `GET /api/advanced-video/drive-download/:fileId` - Create direct download link
-
-## Troubleshooting
-
-- If you encounter issues with video generation, check that your Gemini API key is valid
-- For Google Drive authentication issues, verify your OAuth credentials and redirect URI
-- If reference frame extraction fails, ensure ffmpeg is installed on your server
-- Run the included tests to verify functionality and identify any issues
-
-## License
-
-MIT
+- Never commit your `.env` file to version control
+- Regularly rotate your API keys for better security
+- Use environment variables for all sensitive credentials

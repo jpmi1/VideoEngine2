@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { generateVideoWithFallback, checkVideoStatus } = require('./klingAiService');
+const advancedVideoService = require('./advancedVideoService');
 const { uploadToGoogleDrive, createDirectDownloadLink } = require('./googleDriveService');
 
 /**
- * Generate a video using Kling AI
+ * Generate a video using advanced video service
  * POST /api/advanced-video/generate
  */
 router.post('/generate', async (req, res) => {
   try {
+    console.log('Received request to /api/advanced-video/generate:', JSON.stringify(req.body));
     const { prompt, options = {} } = req.body;
     
     if (!prompt) {
@@ -24,17 +25,21 @@ router.post('/generate', async (req, res) => {
       enhancePrompt: true
     };
     
-    // Generate video using Kling AI
-    const result = await generateVideoWithFallback(prompt, enhancedOptions);
+    // Generate video using advanced video service
+    const result = await advancedVideoService.generateVideoFromScript(prompt, enhancedOptions);
+    console.log('Video generation result:', JSON.stringify(result));
     
     // Return task information
     res.json({
-      id: result.taskId || `task_${Date.now()}`,
+      id: result.id || `task_${Date.now()}`,
       status: result.status,
       message: result.message,
       prompt: prompt,
       options: enhancedOptions,
-      keywords: result.keywords || []
+      keywords: result.keywords || [],
+      finalVideoUrl: result.finalVideoUrl,
+      googleDriveUrl: result.googleDriveUrl,
+      googleDriveDownloadUrl: result.googleDriveDownloadUrl
     });
   } catch (error) {
     console.error('Error generating video:', error);
@@ -51,6 +56,7 @@ router.post('/generate', async (req, res) => {
 router.get('/status/:taskId', async (req, res) => {
   try {
     const { taskId } = req.params;
+    console.log('Checking status for task:', taskId);
     
     if (!taskId) {
       return res.status(400).json({ 
@@ -59,15 +65,18 @@ router.get('/status/:taskId', async (req, res) => {
     }
     
     // Check task status
-    const result = await checkVideoStatus(taskId);
+    const result = await advancedVideoService.getVideoRequestStatus(taskId);
+    console.log('Status check result:', JSON.stringify(result));
     
     // Return status information
     res.json({
       id: taskId,
       status: result.status,
       message: result.message,
-      videoUrl: result.videoUrl || null,
-      videoDuration: result.videoDuration || null
+      videoUrl: result.videoUrl || result.finalVideoUrl || null,
+      videoDuration: result.videoDuration || null,
+      googleDriveUrl: result.googleDriveUrl || null,
+      googleDriveDownloadUrl: result.googleDriveDownloadUrl || null
     });
   } catch (error) {
     console.error('Error checking video status:', error);
@@ -83,6 +92,7 @@ router.get('/status/:taskId', async (req, res) => {
  */
 router.post('/upload-to-drive', async (req, res) => {
   try {
+    console.log('Received request to upload to Drive:', JSON.stringify(req.body));
     const { videoUrl, fileName } = req.body;
     
     if (!videoUrl) {
@@ -97,6 +107,7 @@ router.post('/upload-to-drive', async (req, res) => {
     
     // Upload video to Google Drive
     const uploadResult = await uploadToGoogleDrive(videoUrl, videoFileName);
+    console.log('Upload result:', JSON.stringify(uploadResult));
     
     // Create direct download link
     const downloadLink = await createDirectDownloadLink(uploadResult.fileId);
@@ -124,6 +135,7 @@ router.post('/upload-to-drive', async (req, res) => {
 router.get('/drive-download/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
+    console.log('Creating download link for file:', fileId);
     
     if (!fileId) {
       return res.status(400).json({ 
@@ -149,6 +161,32 @@ router.get('/drive-download/:fileId', async (req, res) => {
 });
 
 /**
+ * Get list of videos
+ * GET /api/advanced-video/list
+ */
+router.get('/list', async (req, res) => {
+  try {
+    console.log('Getting list of videos');
+    
+    // Get list of videos
+    const videos = await advancedVideoService.listVideoRequests();
+    
+    // Return video list
+    res.json({
+      videos: videos,
+      count: videos.length,
+      message: 'Video list retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting video list:', error);
+    res.status(500).json({ 
+      error: `Failed to get video list: ${error.message}`,
+      videos: [] // Return empty array on error
+    });
+  }
+});
+
+/**
  * Health check endpoint
  * GET /api/advanced-video/health
  */
@@ -156,8 +194,16 @@ router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     message: 'Advanced video service is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    routes: {
+      generate: '/api/advanced-video/generate',
+      status: '/api/advanced-video/status/:taskId',
+      upload: '/api/advanced-video/upload-to-drive',
+      download: '/api/advanced-video/drive-download/:fileId',
+      list: '/api/advanced-video/list'
+    }
   });
 });
 
+// Export the router
 module.exports = router;
