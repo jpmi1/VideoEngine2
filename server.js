@@ -1,6 +1,6 @@
 /**
  * Server script with robust punycode fix and API endpoint improvements
- * Implements multiple solutions to address deprecation warnings and API issues
+ * Implements direct solutions to address deprecation warnings and API issues
  */
 
 // SOLUTION 1: Use a direct userland alternative for punycode
@@ -14,7 +14,7 @@ process.emit = function(name, data, ...args) {
     name === 'warning' && 
     data && 
     data.name === 'DeprecationWarning' && 
-    data.message.includes('punycode')
+    (data.message.includes('punycode') || data.message.includes('inflight'))
   ) {
     return false;
   }

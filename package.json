@@ -4,7 +4,7 @@
     "test": "node tests/run-tests.js",
     "test:report": "node tests/run-tests.js > logs/test-report.txt && cat logs/test-report.txt",
     "test:railway": "node tests/railway-tests.js",
-    "postinstall": "patch-package"
+    "test:comprehensive": "node tests/comprehensive-tests.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -14,8 +14,6 @@
     "express": "^4.18.2",
     "googleapis": "^126.0.1",
     "multer": "^1.4.5-lts.1",
-    "patch-package": "^8.0.0",
-    "postinstall-postinstall": "^2.1.0",
     "punycode": "^2.3.1",
     "uuid": "^9.0.1"
   },
