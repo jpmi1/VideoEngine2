@@ -1,16 +1,16 @@
 /**
- * Frontend JavaScript for Advanced Video Generation with 16:9 aspect ratio
- * and Google Drive direct download links
+ * Fixed Advanced Video Generation Frontend JavaScript
+ * Includes proper DOM element checks and error handling
  */
 
-// DOM Elements
-const videoForm = document.getElementById('video-form');
-const scriptInput = document.getElementById('script-input');
-const generateBtn = document.getElementById('generate-btn');
-const videoList = document.getElementById('video-list');
-const statusArea = document.getElementById('status-area');
-const driveAuthBtn = document.getElementById('drive-auth-btn');
-const driveFilesList = document.getElementById('drive-files-list');
+// DOM Elements - with null checks
+let videoForm = null;
+let scriptInput = null;
+let generateBtn = null;
+let videoList = null;
+let statusArea = null;
+let driveAuthBtn = null;
+let driveFilesList = null;
 
 // User ID for Google Drive integration
 let userId = localStorage.getItem('driveUserId') || generateUserId();
@@ -27,9 +27,19 @@ function generateUserId() {
 
 /**
  * Initialize the application
+ * Safely gets DOM elements and sets up event listeners
  */
 function init() {
   console.log('Initializing advanced video generation module');
+  
+  // Safely get DOM elements
+  videoForm = document.getElementById('video-form');
+  scriptInput = document.getElementById('script-input');
+  generateBtn = document.getElementById('generate-btn');
+  videoList = document.getElementById('video-list');
+  statusArea = document.getElementById('status-area');
+  driveAuthBtn = document.getElementById('drive-auth-btn');
+  driveFilesList = document.getElementById('drive-files-list');
   
   // Check for authentication success
   const urlParams = new URLSearchParams(window.location.search);
@@ -53,44 +63,61 @@ function init() {
 }
 
 /**
- * Set up event listeners
+ * Set up event listeners with proper null checks
  */
 function setupEventListeners() {
   // Video generation form
   if (videoForm) {
     videoForm.addEventListener('submit', handleVideoGeneration);
+  } else {
+    console.warn('Video form element not found');
   }
   
   // Google Drive authentication
   if (driveAuthBtn) {
     driveAuthBtn.addEventListener('click', handleDriveAuth);
+  } else {
+    console.warn('Drive auth button not found');
   }
   
-  // Tab switching
-  document.querySelectorAll('.nav-link').forEach(tab => {
-    tab.addEventListener('click', function(e) {
-      e.preventDefault();
-      const targetId = this.getAttribute('href').substring(1);
-      
-      // Hide all tab content
-      document.querySelectorAll('.tab-pane').forEach(pane => {
-        pane.classList.remove('show', 'active');
+  // Tab switching - with proper null checks
+  const navLinks = document.querySelectorAll('.nav-link');
+  navLinks.forEach(tab => {
+    if (tab && tab.getAttribute('href')) {
+      tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('href');
+        if (!targetId) return;
+        
+        // Remove # from the beginning if present
+        const targetIdClean = targetId.startsWith('#') ? targetId.substring(1) : targetId;
+        const targetElement = document.getElementById(targetIdClean);
+        
+        if (!targetElement) {
+          console.warn(`Target element ${targetIdClean} not found`);
+          return;
+        }
+        
+        // Hide all tab content
+        document.querySelectorAll('.tab-pane').forEach(pane => {
+          if (pane) pane.classList.remove('show', 'active');
+        });
+        
+        // Show selected tab content
+        targetElement.classList.add('show', 'active');
+        
+        // Update active tab
+        document.querySelectorAll('.nav-link').forEach(navLink => {
+          if (navLink) navLink.classList.remove('active');
+        });
+        this.classList.add('active');
+        
+        // Load content for specific tabs
+        if (targetIdClean === 'drive-tab') {
+          loadDriveFiles();
+        }
       });
-      
-      // Show selected tab content
-      document.getElementById(targetId).classList.add('show', 'active');
-      
-      // Update active tab
-      document.querySelectorAll('.nav-link').forEach(navLink => {
-        navLink.classList.remove('active');
-      });
-      this.classList.add('active');
-      
-      // Load content for specific tabs
-      if (targetId === 'drive-tab') {
-        loadDriveFiles();
-      }
-    });
+    }
   });
 }
 
@@ -101,16 +128,25 @@ function setupEventListeners() {
 async function handleVideoGeneration(e) {
   e.preventDefault();
   
+  // Check if script input exists
+  if (!scriptInput) {
+    showToast('Script input element not found', 'error');
+    return;
+  }
+  
   const script = scriptInput.value.trim();
   if (!script) {
     showToast('Please enter a script', 'error');
     return;
   }
   
-  // Get options from form
+  // Get options from form with null checks
+  const styleInput = document.getElementById('style-input');
+  const durationInput = document.getElementById('duration-input');
+  
   const options = {
-    style: document.getElementById('style-input')?.value || 'cinematic',
-    clipDuration: parseInt(document.getElementById('duration-input')?.value) || 4,
+    style: styleInput ? styleInput.value : 'cinematic',
+    clipDuration: durationInput ? parseInt(durationInput.value) : 4,
     aspectRatio: '16:9', // Ensure 16:9 aspect ratio
     resolution: '1920x1080' // Full HD resolution
   };
@@ -136,9 +172,12 @@ async function handleVideoGeneration(e) {
     const data = await response.json();
     
     // Start polling for status
-    pollVideoStatus(data.id);
-    
-    showToast('Video generation started!', 'success');
+    if (data && data.id) {
+      pollVideoStatus(data.id);
+      showToast('Video generation started!', 'success');
+    } else {
+      throw new Error('Invalid response from server');
+    }
   } catch (error) {
     console.error('Error generating video:', error);
     showToast(`Failed to generate video: ${error.message}`, 'error');
@@ -185,11 +224,14 @@ async function pollVideoStatus(requestId) {
 }
 
 /**
- * Update status display
+ * Update status display with null check
  * @param {object} data - Status data
  */
 function updateStatusDisplay(data) {
-  if (!statusArea) return;
+  if (!statusArea) {
+    console.warn('Status area element not found');
+    return;
+  }
   
   let statusHtml = `
     <div class="card mb-3">
@@ -245,10 +287,13 @@ function getStatusColor(status) {
 }
 
 /**
- * Load videos from API
+ * Load videos from API with null check
  */
 async function loadVideos() {
-  if (!videoList) return;
+  if (!videoList) {
+    console.warn('Video list element not found');
+    return;
+  }
   
   try {
     const response = await fetch('/api/advanced-video/list');
@@ -271,11 +316,14 @@ async function loadVideos() {
 }
 
 /**
- * Render video list
+ * Render video list with null check
  * @param {Array} videos - List of videos
  */
 function renderVideoList(videos) {
-  if (!videoList) return;
+  if (!videoList) {
+    console.warn('Video list element not found');
+    return;
+  }
   
   let html = '<div class="row">';
   
@@ -354,10 +402,13 @@ async function handleDriveAuth() {
 }
 
 /**
- * Load files from Google Drive
+ * Load files from Google Drive with null check
  */
 async function loadDriveFiles() {
-  if (!driveFilesList) return;
+  if (!driveFilesList) {
+    console.warn('Drive files list element not found');
+    return;
+  }
   
   try {
     const response = await fetch(`/api/advanced-video/drive-files?userId=${userId}`);
@@ -374,7 +425,7 @@ async function loadDriveFiles() {
       driveFilesList.innerHTML = `
         <div class="alert alert-info">
           No video files found in Google Drive. 
-          <a href="#" onclick="handleDriveAuth()">Authenticate</a> if you haven't already.
+          <a href="#" onclick="handleDriveAuth(); return false;">Authenticate</a> if you haven't already.
         </div>
       `;
     }
@@ -384,18 +435,21 @@ async function loadDriveFiles() {
       <div class="alert alert-danger">
         Failed to load files: ${error.message}
         <br>
-        <a href="#" onclick="handleDriveAuth()">Authenticate with Google Drive</a>
+        <a href="#" onclick="handleDriveAuth(); return false;">Authenticate with Google Drive</a>
       </div>
     `;
   }
 }
 
 /**
- * Render Google Drive files
+ * Render Google Drive files with null check
  * @param {Array} files - List of files
  */
 function renderDriveFiles(files) {
-  if (!driveFilesList) return;
+  if (!driveFilesList) {
+    console.warn('Drive files list element not found');
+    return;
+  }
   
   let html = '<div class="row">';
   
@@ -424,7 +478,7 @@ function renderDriveFiles(files) {
               <a href="${file.webViewLink}" class="btn btn-outline-secondary ms-2" target="_blank">
                 <i class="bi bi-google"></i> View in Drive
               </a>
-              <button class="btn btn-outline-primary ms-2" onclick="createDirectDownloadLink('${file.id}')">
+              <button class="btn btn-outline-primary ms-2" onclick="createDirectDownloadLink('${file.id}'); return false;">
                 <i class="bi bi-link-45deg"></i> Direct Link
               </button>
             </div>
@@ -443,6 +497,11 @@ function renderDriveFiles(files) {
  * @param {string} fileId - Google Drive file ID
  */
 async function createDirectDownloadLink(fileId) {
+  if (!fileId) {
+    showToast('Invalid file ID', 'error');
+    return;
+  }
+  
   try {
     const response = await fetch(`/api/advanced-video/drive-download/${fileId}?userId=${userId}`);
     
@@ -452,15 +511,20 @@ async function createDirectDownloadLink(fileId) {
     
     const data = await response.json();
     
+    if (!data.downloadUrl) {
+      throw new Error('No download URL in response');
+    }
+    
     // Copy to clipboard
-    navigator.clipboard.writeText(data.downloadUrl)
-      .then(() => {
-        showToast('Direct download link copied to clipboard!', 'success');
-      })
-      .catch(err => {
-        console.error('Could not copy text: ', err);
-        showToast('Direct download link created, but could not copy to clipboard', 'warning');
-      });
+    try {
+      await navigator.clipboard.writeText(data.downloadUrl);
+      showToast('Direct download link copied to clipboard!', 'success');
+    } catch (clipboardErr) {
+      console.error('Could not copy text: ', clipboardErr);
+      showToast('Direct download link created, but could not copy to clipboard', 'warning');
+      // Show the URL in a modal or alert as fallback
+      alert(`Direct download link: ${data.downloadUrl}`);
+    }
   } catch (error) {
     console.error('Error creating direct download link:', error);
     showToast(`Failed to create direct download link: ${error.message}`, 'error');
@@ -468,7 +532,7 @@ async function createDirectDownloadLink(fileId) {
 }
 
 /**
- * Set form disabled state
+ * Set form disabled state with null checks
  * @param {boolean} disabled - Whether to disable the form
  */
 function setFormDisabled(disabled) {
@@ -523,16 +587,24 @@ function showToast(message, type = 'info') {
   toastContainer.appendChild(toast);
   
   // Initialize and show toast
-  const bsToast = new bootstrap.Toast(toast, {
-    autohide: true,
-    delay: 5000
-  });
-  bsToast.show();
-  
-  // Remove toast after it's hidden
-  toast.addEventListener('hidden.bs.toast', function() {
-    toast.remove();
-  });
+  if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+    const bsToast = new bootstrap.Toast(toast, {
+      autohide: true,
+      delay: 5000
+    });
+    bsToast.show();
+    
+    // Remove toast after it's hidden
+    toast.addEventListener('hidden.bs.toast', function() {
+      toast.remove();
+    });
+  } else {
+    // Fallback if Bootstrap is not available
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.remove();
+    }, 5000);
+  }
 }
 
 /**
@@ -546,9 +618,53 @@ function getToastColor(type) {
     case 'error': return 'danger';
     case 'warning': return 'warning';
     case 'info':
-    default: return 'primary';
+    default: return 'info';
   }
 }
 
-// Initialize on page load
+/**
+ * Safe function to show a section
+ * Ensures element exists before manipulating it
+ * @param {string} sectionId - ID of the section to show
+ */
+function showSection(sectionId) {
+  // Hide all sections
+  const sections = document.querySelectorAll('.section');
+  sections.forEach(section => {
+    if (section) section.style.display = 'none';
+  });
+  
+  // Show the selected section
+  const selectedSection = document.getElementById(sectionId);
+  if (selectedSection) {
+    selectedSection.style.display = 'block';
+  } else {
+    console.warn(`Section with ID ${sectionId} not found`);
+  }
+  
+  // Update active nav link
+  const navLinks = document.querySelectorAll('.nav-link');
+  navLinks.forEach(link => {
+    if (!link) return;
+    
+    const linkTarget = link.getAttribute('href');
+    if (!linkTarget) return;
+    
+    // Remove # if present
+    const targetId = linkTarget.startsWith('#') ? linkTarget.substring(1) : linkTarget;
+    
+    if (targetId === sectionId) {
+      link.classList.add('active');
+    } else {
+      link.classList.remove('active');
+    }
+  });
+}
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
+
+// Add test script
+const testScript = document.createElement('script');
+testScript.src = '/tests/frontend-tests.js';
+document.head.appendChild(testScript);
