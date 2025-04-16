@@ -12,7 +12,7 @@ const stopwords = require('stopwords').english;
  * @param {number} maxKeywords - Maximum number of keywords to extract (default: 5)
  * @returns {string[]} Array of extracted keywords
  */
-function extractKeywords(text, maxKeywords = 5) {
+function extractKeywordsFromText(text, maxKeywords = 5) {
   try {
     // If natural module is not available, use simple extraction
     if (!natural) {
@@ -119,7 +119,8 @@ function categorizeKeywords(keywords) {
   return result;
 }
 
+// Export with renamed function to avoid conflicts
 module.exports = {
-  extractKeywords,
+  extractKeywords: extractKeywordsFromText,
   categorizeKeywords
 };

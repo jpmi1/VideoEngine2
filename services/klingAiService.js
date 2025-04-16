@@ -1,3 +1,8 @@
+/**
+ * Kling AI Service for video generation
+ * Provides integration with Kling AI API for text-to-video generation
+ */
+
 const axios = require('axios');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -270,34 +275,8 @@ function generateMockVideoUrl(keywords) {
   return stockVideos.default;
 }
 
-/**
- * Extract keywords from text if extractKeywords function is not available
- * @param {string} text - Text to extract keywords from
- * @returns {string[]} Extracted keywords
- */
-function extractKeywords(text) {
-  // Simple keyword extraction if the imported function is not available
-  if (typeof extractKeywords !== 'function') {
-    // Remove common words and punctuation
-    const commonWords = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'as', 'of'];
-    const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
-    
-    // Filter out common words and short words
-    const keywords = words.filter(word => 
-      word.length > 3 && !commonWords.includes(word)
-    );
-    
-    // Return unique keywords
-    return [...new Set(keywords)];
-  }
-  
-  // Use the imported function if available
-  return extractKeywords(text);
-}
-
 module.exports = {
   generateVideo,
   checkVideoStatus,
-  generateVideoWithFallback,
-  extractKeywords
+  generateVideoWithFallback
 };
