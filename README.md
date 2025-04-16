@@ -9,7 +9,6 @@ This application generates videos using Gemini Veo 2 with 16:9 aspect ratio and 
 - **Test-Time Training**: Maintains consistency between clips using reference frames
 - **Script Parsing**: Automatically breaks scripts into 3-4 second clips
 - **Responsive UI**: Clean interface for video generation and management
-- **Comprehensive Testing**: Includes frontend and backend testing scripts
 
 ## Setup Instructions
 
@@ -61,34 +60,6 @@ PORT=8080
 4. Click "Generate Video" to start the generation process
 5. Once complete, use the "Download from Google Drive" button to download your video
 
-## Testing
-
-This package includes comprehensive testing scripts to verify functionality:
-
-### Running Backend Tests
-
-```bash
-node tests/run-tests.js
-```
-
-This will run all backend tests and generate an HTML test report at `tests/test-report.html`.
-
-### Running Frontend Tests
-
-1. Open the application in your browser
-2. Look for the "Run Frontend Tests" button in the bottom right corner
-3. Click the button to run the tests
-4. Test results will appear on the page
-
-## Fixed Issues
-
-The following issues have been fixed in this version:
-
-1. **DOM Element Null Errors**: Added proper null checks before accessing DOM elements
-2. **Event Handler Errors**: Implemented safer event listeners with existence verification
-3. **Error Handling**: Added comprehensive error handling throughout the application
-4. **Testing**: Added frontend and backend testing scripts to verify functionality
-
 ## API Endpoints
 
 - `POST /api/advanced-video/generate` - Generate a video from a script
@@ -104,7 +75,6 @@ The following issues have been fixed in this version:
 - If you encounter issues with video generation, check that your Gemini API key is valid
 - For Google Drive authentication issues, verify your OAuth credentials and redirect URI
 - If reference frame extraction fails, ensure ffmpeg is installed on your server
-- Run the included tests to verify functionality and identify any issues
 
 ## License
 
